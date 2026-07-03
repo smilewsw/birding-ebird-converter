@@ -370,6 +370,8 @@ if st.session_state.get("_prev_file_hash") != _file_hash:
         if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_") or k.startswith("_prev_mode"):
             del st.session_state[k]
     st.session_state["_prev_file_hash"] = _file_hash
+    st.rerun()
+    st.stop()
 
 # 提取列名
 df.columns = [str(c).strip() for c in df.columns]
