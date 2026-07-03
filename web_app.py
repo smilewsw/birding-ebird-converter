@@ -12,6 +12,7 @@ from birdreport_to_ebird import province_convert
 from hotspot_matcher import (
     fetch_hotspots,
     match_location,
+    find_nearest_hotspot,
     geocode_amap,
     PROVINCE_TO_ISO,
     _extract_cn,
@@ -164,6 +165,98 @@ def convert_dataframe(
     }, output_df
 
 
+# ========== 随手记转换函数 ==========
+
+def convert_incidental_dataframe(
+    df: pd.DataFrame,
+    include_sw: bool,
+    location_map: dict[tuple, dict] | None = None,
+):
+    """把随手记 DataFrame 转成 eBird CSV。location_map 为 {(lat,lng): {name, lat, lng}}。"""
+    df.columns = [str(c).strip() for c in df.columns]
+    if location_map is None:
+        location_map = {}
+
+    ebird_data = []
+    special_map = {"鹗": "鹗 (鱼鹰)", "隼": "隼形目未知"}
+    species_set = set()
+    coord_set = set()
+
+    for _, row in df.iterrows():
+        common_name = str(row.get('中文名', '')).strip()
+        if common_name in special_map:
+            common_name = special_map[common_name]
+        if len(common_name) < 2:
+            common_name += " "
+        sci_name = str(row.get('拉丁名', '')).strip()
+        count_val = row.get('鸟种数量', 1)
+        count = int(count_val) if pd.notnull(count_val) and count_val > 0 else 1
+        obs_note = str(row.get('描述', '')).strip()
+        species_set.add(common_name)
+
+        # 火星坐标
+        gcj_lat = row.get('纬度（火星）', None)
+        gcj_lng = row.get('经度（火星）', None)
+        has_coords = pd.notnull(gcj_lat) and pd.notnull(gcj_lng)
+        coord_key = (round(float(gcj_lat), 5), round(float(gcj_lng), 5)) if has_coords else None
+        if coord_key:
+            coord_set.add(coord_key)
+
+        # 地点：热点名 > 省/市/县拼接
+        loc_info = location_map.get(coord_key, {}) if coord_key else {}
+        loc_name = loc_info.get('name', '')
+        if not loc_name:
+            parts = [str(row.get('省', '')).strip(),
+                     str(row.get('州/市', '')).strip(),
+                     str(row.get('区/县', '')).strip()]
+            loc_name = ''.join(p for p in parts if p)
+        loc_lat = loc_info.get('lat', round(float(gcj_lat), 6) if has_coords else '')
+        loc_lng = loc_info.get('lng', round(float(gcj_lng), 6) if has_coords else '')
+
+        # 时间
+        record_time = pd.to_datetime(row['记录时间'])
+
+        # 备注
+        report_id = str(row.get('报告编号', 'Unknown'))
+        if include_sw:
+            remarks = f"Originally uploaded to birdreport.cn, record id = {report_id}"
+        else:
+            remarks = f"birdreport.cn record id = {report_id}"
+
+        items = [''] * 19
+        items[0] = common_name
+        items[2] = sci_name
+        items[3] = count
+        items[4] = obs_note
+        items[5] = loc_name
+        items[6] = loc_lat
+        items[7] = loc_lng
+        items[8] = record_time.strftime('%m/%d/%Y')
+        items[9] = record_time.strftime('%H:%M')
+        items[10] = province_convert(row['省'])
+        items[11] = 'CN'
+        items[12] = 'incidental'
+        items[13] = '1'
+        items[14] = 1
+        items[15] = 'Y'
+        items[18] = remarks
+        ebird_data.append(items)
+
+    output_df = pd.DataFrame(ebird_data)
+    csv_buf = io.StringIO()
+    output_df.to_csv(csv_buf, index=False, header=False, encoding='utf-8-sig')
+    csv_bytes = csv_buf.getvalue().encode('utf-8-sig')
+
+    return csv_bytes, {
+        'records': len(ebird_data),
+        'species': len(species_set),
+        'locations': len(coord_set),
+        'provinces': df['省'].nunique(),
+        'heard': 0,
+        'size_kb': len(csv_bytes) / 1024,
+    }, output_df
+
+
 # ========== 热点匹配逻辑 ==========
 
 def build_location_province_map(df: pd.DataFrame) -> dict[str, str]:
@@ -243,7 +336,7 @@ def auto_match_locations(
 
 st.subheader("1. 上传 Excel 文件")
 uploaded = st.file_uploader(
-    "选择从 birdreport.cn 导出的 Excel 文件",
+    "选择从 birdreport.cn 导出的 Excel 文件（定点记 / 随手记均可）",
     type=["xls", "xlsx"],
 )
 
@@ -262,155 +355,274 @@ except Exception as e:
 
 # 提取列名
 df.columns = [str(c).strip() for c in df.columns]
-if 'IUCN受胁级别' not in df.columns:
-    st.error("找不到 'IUCN受胁级别' 列，请确认这是从 birdreport.cn 导出的定点记数据。")
-    st.stop()
 
-# 提取地点→省份映射
-loc_prov_map = build_location_province_map(df)
-unique_locations = sorted(loc_prov_map.keys())
+# ---- 自动识别模式 ----
+is_stationary = '观测结束时间' in df.columns
+auto_mode = "定点记" if is_stationary else "随手记"
 
-st.info(f"已读取 **{len(df)}** 条记录，共 **{len(unique_locations)}** 个不同地点，位于 **{len(set(loc_prov_map.values()))}** 个省份。")
+# 让用户确认/切换模式
+col_m1, col_m2 = st.columns([3, 1])
+with col_m1:
+    st.info(f"已识别为 **{auto_mode}** 数据：{len(df)} 条记录")
+with col_m2:
+    manual_mode = st.radio("切换模式", ["定点记", "随手记"],
+                           index=0 if auto_mode == "定点记" else 1,
+                           key="_mode_switch",
+                           horizontal=False)
+    if manual_mode != auto_mode:
+        st.warning(f"已手动切换为 {manual_mode}")
 
-# ===== 热点匹配 =====
-st.subheader("2. 匹配 eBird 热点")
-st.markdown("自动为每个地点匹配 eBird 热点。匹配不上的用高德补 GPS。你可以手动修正。")
+mode = manual_mode
 
-if st.button("🔍 开始匹配热点", type="primary"):
-    with st.spinner("正在拉取 eBird 热点并匹配…"):
-        st.session_state["_loc_matches"] = auto_match_locations(
-            unique_locations, loc_prov_map, ebird_key, amap_key
-        )
+# ---- 清除旧状态（模式切换时） ----
+if st.session_state.get("_prev_mode") != mode:
+    for k in list(st.session_state.keys()):
+        if k.startswith("_loc_matches") or k.startswith("_sel_"):
+            del st.session_state[k]
+    st.session_state["_prev_mode"] = mode
 
-# 展示匹配结果
-if "_loc_matches" not in st.session_state:
-    st.markdown("---")
-    st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter)")
-    st.stop()
+# ===== 定点记模式 =====
+if mode == "定点记":
+    if 'IUCN受胁级别' not in df.columns:
+        st.error("找不到 'IUCN受胁级别' 列。定点记数据请确认是从 birdreport.cn「报告查询 → 定点记」导出的。")
+        st.stop()
 
-matches = st.session_state["_loc_matches"]
+    loc_prov_map = build_location_province_map(df)
+    unique_locations = sorted(loc_prov_map.keys())
+    st.success(f"共 **{len(unique_locations)}** 个不同地点，位于 **{len(set(loc_prov_map.values()))}** 个省份。")
 
-# 统计
-matched_hotspot = sum(1 for v in matches.values() if v['source'] in ('eBird 热点', 'eBird 热点（手动）'))
-matched_amap = sum(1 for v in matches.values() if v['source'] == '高德坐标')
-no_match = sum(1 for v in matches.values() if v['source'] == '无匹配')
-col_a, col_b, col_c = st.columns(3)
-col_a.metric("✅ 热点匹配", matched_hotspot)
-col_b.metric("📍 GPS 兜底", matched_amap)
-col_c.metric("❌ 无匹配", no_match)
+    st.subheader("2. 匹配 eBird 热点")
+    st.markdown("自动为每个地点匹配 eBird 热点（同名 / 子串 / 相似度）。匹配不上的用高德补 GPS。")
 
-# 可编辑表格：用户修正匹配
-st.markdown("#### 匹配结果（可修改）")
+    if st.button("🔍 开始匹配热点", type="primary"):
+        with st.spinner("正在拉取 eBird 热点并匹配…"):
+            st.session_state["_loc_matches"] = auto_match_locations(
+                unique_locations, loc_prov_map, ebird_key, amap_key
+            )
 
-edit_rows = []
-for loc in unique_locations:
-    m = matches[loc]
-    # 构建候选下拉选项
-    candidates = m.get('candidates', [])
-    options = {}
-    for h in candidates:
-        label = f"[热点] {h['locName']} ({h.get('lat',''):.4f},{h.get('lng',''):.4f})" if isinstance(h, dict) else str(h)
-        options[label] = h
-    # 当前选择
-    current_label = m['name']
-    if m['source'] == 'eBird 热点' and m.get('lat'):
-        current_label = f"[热点] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
-    edit_rows.append({
-        "记录中心地点": loc,
-        "省份": loc_prov_map.get(loc, ''),
-        "匹配来源": m['source'],
-        "当前匹配": current_label,
-    })
+    if "_loc_matches" not in st.session_state:
+        st.markdown("---")
+        st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter)")
+        st.stop()
 
-edit_df = pd.DataFrame(edit_rows)
-st.dataframe(edit_df, use_container_width=True, hide_index=True,
-             column_config={
-                 "记录中心地点": st.column_config.TextColumn(width="small"),
-                 "省份": st.column_config.TextColumn(width="small"),
-                 "匹配来源": st.column_config.TextColumn(width="small"),
-                 "当前匹配": st.column_config.TextColumn(width="large"),
-             })
+    matches = st.session_state["_loc_matches"]
 
-# 用户手动覆盖：对每个无匹配/可疑匹配的地点，给出下拉选择
-with st.expander("🔧 手动修正地点匹配（可选）"):
+    # 统计
+    matched_hotspot = sum(1 for v in matches.values() if v['source'] in ('eBird 热点', 'eBird 热点（手动）'))
+    matched_amap = sum(1 for v in matches.values() if v['source'] == '高德坐标')
+    no_match = sum(1 for v in matches.values() if v['source'] == '无匹配')
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("✅ 热点匹配", matched_hotspot)
+    col_b.metric("📍 GPS 兜底", matched_amap)
+    col_c.metric("❌ 无匹配", no_match)
+
+    # 可编辑表格
+    st.markdown("#### 匹配结果（可修改）")
+    edit_rows = []
     for loc in unique_locations:
         m = matches[loc]
-        candidates = m.get('candidates', [])
-        if not candidates:
-            st.caption(f"「{loc}」— 无候选热点")
-            continue
+        current_label = m['name']
+        if m['source'] in ('eBird 热点', 'eBird 热点（手动）') and m.get('lat'):
+            current_label = f"[热点] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
+        edit_rows.append({
+            "记录中心地点": loc,
+            "省份": loc_prov_map.get(loc, ''),
+            "匹配来源": m['source'],
+            "当前匹配": current_label,
+        })
 
-        # 构建选项
-        candidate_labels = [f"{_extract_cn(h['locName'])}  ({h.get('lat',''):.4f},{h.get('lng',''):.4f})" for h in candidates]
+    edit_df = pd.DataFrame(edit_rows)
+    st.dataframe(edit_df, use_container_width=True, hide_index=True,
+                 column_config={
+                     "记录中心地点": st.column_config.TextColumn(width="small"),
+                     "省份": st.column_config.TextColumn(width="small"),
+                     "匹配来源": st.column_config.TextColumn(width="small"),
+                     "当前匹配": st.column_config.TextColumn(width="large"),
+                 })
 
-        # 当前值索引
-        current_name = m['name']
+    # 手动修正
+    with st.expander("🔧 手动修正地点匹配（可选）"):
+        for loc in unique_locations:
+            m = matches[loc]
+            candidates = m.get('candidates', [])
+            if not candidates:
+                st.caption(f"「{loc}」— 无候选热点")
+                continue
+            candidate_labels = [f"{_extract_cn(h['locName'])}  ({h.get('lat',''):.4f},{h.get('lng',''):.4f})" for h in candidates]
+            current_name = m['name']
+            try:
+                current_idx = next(i for i, h in enumerate(candidates) if h['locName'] == current_name)
+            except StopIteration:
+                current_idx = 0
+            new_idx = st.selectbox(
+                f"「{loc}」→",
+                options=range(len(candidates)),
+                format_func=lambda i, labels=candidate_labels: labels[i],
+                index=min(current_idx, len(candidates) - 1),
+                key=f"_sel_{loc}",
+            )
+            chosen = candidates[new_idx]
+            if chosen['locName'] != current_name or m['source'] not in ('eBird 热点', 'eBird 热点（手动）'):
+                matches[loc] = {
+                    'name': chosen['locName'],
+                    'lat': chosen.get('lat', ''),
+                    'lng': chosen.get('lng', ''),
+                    'source': 'eBird 热点（手动）',
+                    'candidates': candidates,
+                }
+
+    # ===== 定点记转换 =====
+    st.subheader("3. 转换并下载")
+    include_software_info = st.checkbox("在备注中包含软件信息", value=True)
+    if st.button("🚀 开始转换", type="primary", use_container_width=True):
         try:
-            current_idx = next(i for i, h in enumerate(candidates) if h['locName'] == current_name)
-        except StopIteration:
-            current_idx = 0
+            csv_bytes, summary, output_df = convert_dataframe(df, include_software_info, matches)
+            st.success("✅ 转换成功！")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("记录数", summary['records'])
+            c2.metric("鸟种数", summary['species'])
+            c3.metric("地点数", summary['locations'])
+            c4, c5, c6 = st.columns(3)
+            c4.metric("heard", summary['heard'])
+            c5.metric("文件大小", f"{summary['size_kb']:.1f} KB")
+            c6.metric("省份", summary['provinces'])
+            if summary['size_kb'] > 1024:
+                st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
+            st.download_button(
+                "⬇️ 下载 eBird CSV", data=csv_bytes,
+                file_name=f"{os.path.splitext(uploaded.name)[0]}_ebird.csv",
+                mime="text/csv", type="primary", use_container_width=True,
+            )
+            with st.expander("👀 预览前 5 行"):
+                preview = output_df.head().copy()
+                preview.columns = ["俗名", "属", "拉丁名", "数量", "备注", "地点", "纬度", "经度",
+                                   "日期", "时间", "省份", "国家", "协议", "人数", "时长",
+                                   "完整", "距离", "面积", "提交备注"]
+                st.dataframe(preview, use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ 转换失败：{e}")
+            st.exception(e)
 
-        new_idx = st.selectbox(
-            f"「{loc}」→",
-            options=range(len(candidates)),
-            format_func=lambda i: candidate_labels[i],
-            index=min(current_idx, len(candidates) - 1),
-            key=f"_sel_{loc}",
-        )
+# ===== 随手记模式 =====
+else:
+    if '记录时间' not in df.columns:
+        st.error("找不到 '记录时间' 列。随手记数据请确认是从 birdreport.cn「报告查询 → 随手记」导出的。")
+        st.stop()
 
-        chosen = candidates[new_idx]
-        # 只在用户真正改动时覆盖，避免每次 rerun 重置所有匹配
-        if chosen['locName'] != current_name or m['source'] not in ('eBird 热点', 'eBird 热点（手动）'):
-            matches[loc] = {
-                'name': chosen['locName'],
-                'lat': chosen.get('lat', ''),
-                'lng': chosen.get('lng', ''),
-                'source': 'eBird 热点（手动）',
-                'candidates': candidates,
-            }
+    # 提取唯一坐标
+    coords_list = []
+    coord_set = set()
+    for _, row in df.iterrows():
+        gcj_lat = row.get('纬度（火星）', None)
+        gcj_lng = row.get('经度（火星）', None)
+        if pd.notnull(gcj_lat) and pd.notnull(gcj_lng):
+            key = (round(float(gcj_lat), 5), round(float(gcj_lng), 5))
+            if key not in coord_set:
+                coord_set.add(key)
+                province = str(row.get('省', '')).strip()
+                city = str(row.get('州/市', '')).strip()
+                district = str(row.get('区/县', '')).strip()
+                loc_name = ''.join(p for p in [province, city, district] if p)
+                coords_list.append({'key': key, 'lat': float(gcj_lat), 'lng': float(gcj_lng), 'name': loc_name})
 
-# ===== 转换 =====
-st.subheader("3. 转换并下载")
+    st.success(f"共 **{len(coord_set)}** 个不同坐标点")
 
-include_software_info = st.checkbox("在备注中包含软件信息", value=True)
+    st.subheader("2. 按坐标匹配 eBird 热点")
+    st.markdown("根据火星坐标搜索 5km 范围内最近的 eBird 热点。")
 
-if st.button("🚀 开始转换", type="primary", use_container_width=True):
-    try:
-        csv_bytes, summary, output_df = convert_dataframe(df, include_software_info, matches)
+    if st.button("🔍 开始匹配热点", type="primary"):
+        with st.spinner("正在按坐标搜索 eBird 热点…"):
+            coord_matches = {}
+            for c in coords_list:
+                nearest = find_nearest_hotspot(c['lat'], c['lng'], ebird_key, dist=5)
+                if nearest:
+                    coord_matches[c['key']] = {
+                        'name': nearest['locName'],
+                        'lat': nearest.get('lat', round(c['lat'], 5)),
+                        'lng': nearest.get('lng', round(c['lng'], 5)),
+                        'source': 'eBird 热点（坐标）',
+                        'candidates': [nearest],
+                    }
+                else:
+                    coord_matches[c['key']] = {
+                        'name': c['name'],
+                        'lat': round(c['lat'], 5),
+                        'lng': round(c['lng'], 5),
+                        'source': '原始坐标',
+                        'candidates': [],
+                    }
+            st.session_state["_loc_matches"] = coord_matches
 
-        st.success("✅ 转换成功！")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("记录数", summary['records'])
-        c2.metric("鸟种数", summary['species'])
-        c3.metric("地点数", summary['locations'])
-        c4, c5, c6 = st.columns(3)
-        c4.metric("heard", summary['heard'])
-        c5.metric("文件大小", f"{summary['size_kb']:.1f} KB")
-        c6.metric("省份", summary['provinces'])
+    if "_loc_matches" not in st.session_state:
+        st.markdown("---")
+        st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter)")
+        st.stop()
 
-        if summary['size_kb'] > 1024:
-            st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
+    matches = st.session_state["_loc_matches"]
 
-        st.download_button(
-            "⬇️ 下载 eBird CSV",
-            data=csv_bytes,
-            file_name=f"{os.path.splitext(uploaded.name)[0]}_ebird.csv",
-            mime="text/csv",
-            type="primary",
-            use_container_width=True,
-        )
+    # 统计
+    matched_hotspot = sum(1 for v in matches.values() if v['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）'))
+    raw_coord = sum(1 for v in matches.values() if v['source'] == '原始坐标')
+    col_a, col_b = st.columns(2)
+    col_a.metric("✅ 热点匹配", matched_hotspot)
+    col_b.metric("📍 原始坐标", raw_coord)
 
-        with st.expander("👀 预览前 5 行"):
-            cols = ["俗名", "属", "拉丁名", "数量", "备注", "地点", "纬度", "经度",
-                    "日期", "时间", "省份", "国家", "协议", "人数", "时长",
-                    "完整", "距离", "面积", "提交备注"]
-            preview = output_df.head().copy()
-            preview.columns = cols
-            st.dataframe(preview, use_container_width=True)
+    # 匹配结果表格
+    st.markdown("#### 匹配结果（可修改）")
+    edit_rows = []
+    for c in coords_list:
+        m = matches[c['key']]
+        current_label = m['name']
+        if m['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）'):
+            current_label = f"[热点] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
+        else:
+            current_label = f"[坐标] {c['name']} ({m['lat']:.4f},{m['lng']:.4f})"
+        edit_rows.append({
+            "原始地点": c['name'],
+            "坐标": f"({c['lat']:.4f}, {c['lng']:.4f})",
+            "匹配来源": m['source'],
+            "当前匹配": current_label,
+        })
 
-    except Exception as e:
-        st.error(f"❌ 转换失败：{e}")
-        st.exception(e)
+    edit_df = pd.DataFrame(edit_rows)
+    st.dataframe(edit_df, use_container_width=True, hide_index=True,
+                 column_config={
+                     "原始地点": st.column_config.TextColumn(width="small"),
+                     "坐标": st.column_config.TextColumn(width="small"),
+                     "匹配来源": st.column_config.TextColumn(width="small"),
+                     "当前匹配": st.column_config.TextColumn(width="large"),
+                 })
+
+    # ===== 随手记转换 =====
+    st.subheader("3. 转换并下载")
+    include_software_info = st.checkbox("在备注中包含软件信息", value=True)
+    if st.button("🚀 开始转换", type="primary", use_container_width=True):
+        try:
+            csv_bytes, summary, output_df = convert_incidental_dataframe(df, include_software_info, matches)
+            st.success("✅ 转换成功！")
+            c1, c2, c3 = st.columns(3)
+            c1.metric("记录数", summary['records'])
+            c2.metric("鸟种数", summary['species'])
+            c3.metric("坐标点数", summary['locations'])
+            c4, c5 = st.columns(2)
+            c4.metric("文件大小", f"{summary['size_kb']:.1f} KB")
+            c5.metric("省份", summary['provinces'])
+            if summary['size_kb'] > 1024:
+                st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
+            st.download_button(
+                "⬇️ 下载 eBird CSV", data=csv_bytes,
+                file_name=f"{os.path.splitext(uploaded.name)[0]}_ebird.csv",
+                mime="text/csv", type="primary", use_container_width=True,
+            )
+            with st.expander("👀 预览前 5 行"):
+                preview = output_df.head().copy()
+                preview.columns = ["俗名", "属", "拉丁名", "数量", "备注", "地点", "纬度", "经度",
+                                   "日期", "时间", "省份", "国家", "协议", "人数", "时长",
+                                   "完整", "距离", "面积", "提交备注"]
+                st.dataframe(preview, use_container_width=True)
+        except Exception as e:
+            st.error(f"❌ 转换失败：{e}")
+            st.exception(e)
 
 st.markdown("---")
 st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter) | 热点匹配由 eBird API + 高德地图提供")

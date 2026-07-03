@@ -143,6 +143,31 @@ def match_location(location_name: str, hotspots: list[dict]) -> dict | None:
     return None
 
 
+def find_nearest_hotspot(lat: float, lng: float, ebird_key: str, dist: int = 5) -> dict | None:
+    """按 GPS 坐标搜索最近 eBird 热点。
+
+    Args:
+        lat, lng: 坐标（WGS-84 最佳，GCJ-02 也可用）
+        ebird_key: eBird API Key
+        dist: 搜索半径（km），默认 5
+
+    Returns:
+        最近的热点 dict（含 locId/locName/lat/lng），或 None
+    """
+    url = "https://api.ebird.org/v2/ref/hotspot/geo"
+    params = {"lat": lat, "lng": lng, "dist": dist, "fmt": "json"}
+    headers = {"X-eBirdApiToken": ebird_key}
+    try:
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        if resp.status_code == 200:
+            hotspots = resp.json()
+            if hotspots:
+                return hotspots[0]  # API 按距离排序，第一即最近
+    except Exception:
+        pass
+    return None
+
+
 def geocode_amap(address: str, province: str, amap_key: str) -> tuple[float | None, float | None]:
     """高德地图地理编码：地名 → GPS。
 
