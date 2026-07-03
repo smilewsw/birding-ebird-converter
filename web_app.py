@@ -226,7 +226,7 @@ def convert_incidental_dataframe(
         sci_name = str(row.get('拉丁名', '')).strip()
         count_val = row.get('鸟种数量', 1)
         count = int(count_val) if pd.notnull(count_val) and count_val > 0 else 1
-        obs_note = str(row.get('描述', '')).strip()
+        obs_note = str(row.get('描述', '')).strip() if pd.notnull(row.get('描述', '')) else ''
         species_set.add(common_name)
 
         gcj_lat = row.get('纬度（火星）', None)
