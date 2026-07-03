@@ -337,7 +337,7 @@ def convert_incidental_dataframe(
     output_df.to_csv(csv_buf, index=False, header=False, encoding='utf-8-sig')
     csv_bytes = csv_buf.getvalue().encode('utf-8-sig')
 
-    # 统计合并后的 checklist 数
+    # 统计合并后的 checklist 数（合并后的热点组 + 未合并的独立记录）
     checklist_count = len(set(
         (ri['loc_name'], ri['record_time'].strftime('%Y-%m-%d'))
         for ri in row_infos if ri['can_merge']
@@ -349,7 +349,6 @@ def convert_incidental_dataframe(
         'locations': len(coord_set),
         'provinces': df['省'].nunique(),
         'heard': 0,
-        'merge_count': merge_count,
         'checklists': checklist_count,
         'size_kb': len(csv_bytes) / 1024,
     }, output_df
@@ -912,7 +911,7 @@ else:
         c2.metric("鸟种数", summary['species'])
         c3.metric("坐标点数", summary['locations'])
         c4, c5, c6 = st.columns(3)
-        c4.metric("合并记录数", summary.get('merge_count', 0))
+        c4.metric("checklist数", summary.get('checklists', 0))
         c5.metric("文件大小", f"{summary['size_kb']:.1f} KB")
         c6.metric("省份", summary['provinces'])
         if summary['size_kb'] > 1024:
