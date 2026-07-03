@@ -51,16 +51,22 @@ def get_province_hotspots(province: str, key: str) -> list:
 # ---- 使用说明 ----
 with st.expander("📖 使用说明", expanded=False):
     st.markdown("""
+    ### 支持的记录类型
+    - **定点记**：按地点名匹配 eBird 热点（同名 / 子串 / 相似度），未匹配的用高德地图补充 GPS
+    - **随手记**：按 GPS 坐标匹配 5km 内最近的 eBird 热点，未匹配的用高德逆地理编码获取 POI 名称
+
     ### 步骤 1：从记录中心导出数据
     1. 打开 [birdreport.cn](http://birdreport.cn/) 网页版
-    2. 进入「报告查询 → 定点记」
+    2. 定点记：「报告查询 → 定点记」，随手记：「报告查询 → 随手记」
     3. 每页切成 200 条 → 全选 → 导出 Excel
 
     ### 步骤 2：上传 → 匹配热点 → 转换
-    1. 上传 Excel 后，自动提取所有观测地点
-    2. 点击「匹配热点」，自动匹配 eBird 热点（同名 / 子串 / 相似度）
-    3. 未匹配的地点使用高德地图补充 GPS
-    4. 检查匹配结果，必要时手动修正 → 点击转换 → 下载 CSV
+    1. 上传 Excel，自动识别记录类型（定点记 / 随手记）
+    2. 点击「匹配热点」
+       - 定点记：按地点名匹配 eBird 热点，未匹配的用高德地图补充 GPS
+       - 随手记：按坐标匹配 5km 内最近的 eBird 热点，未匹配的用高德地图获取 POI 名称
+    3. 检查匹配结果，可展开「手动修正地点匹配」修改（选择框可直接输入关键字模糊查询）
+    4. 点击「开始转换」→ 下载 CSV
 
     ### 步骤 3：上传到 eBird
     1. 打开 [ebird.org/import](https://ebird.org/import/status/all.htm)
