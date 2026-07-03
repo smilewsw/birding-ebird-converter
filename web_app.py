@@ -583,6 +583,8 @@ if mode == "定点记":
     with st.expander("🔧 手动修正地点匹配（可选）"):
         with st.container(height=800):
             st.caption("💡 提示：选择框可直接输入关键字模糊查询热点")
+            # 记录修改前的匹配快照，用于检测是否变更
+            _matches_before = {k: v['name'] for k, v in matches.items()}
             for loc in unique_locations:
                 m = matches.get(loc)
                 if not m:
@@ -643,6 +645,10 @@ if mode == "定点记":
 
             # 确保修改同步到 session_state
             st.session_state["_loc_matches"] = matches
+            # 如果匹配结果变了，清除旧的转换结果，提示用户重新转换
+            _matches_after = {k: v['name'] for k, v in matches.items()}
+            if _matches_before != _matches_after and "_convert_result" in st.session_state:
+                del st.session_state["_convert_result"]
 
     # ===== 定点记转换 =====
     st.subheader("3. 转换并下载")
@@ -839,6 +845,7 @@ else:
     with st.expander("🔧 手动修正地点匹配（可选）"):
         with st.container(height=800):
             st.caption("💡 提示：选择框可直接输入关键字模糊查询热点")
+            _matches_before = {k: v['name'] for k, v in matches.items()}
             for c in coords_list:
                 m = matches.get(c['key'])
                 if not m:
@@ -908,6 +915,10 @@ else:
 
             # 确保修改同步到 session_state
             st.session_state["_loc_matches"] = matches
+            # 如果匹配结果变了，清除旧的转换结果，提示用户重新转换
+            _matches_after = {k: v['name'] for k, v in matches.items()}
+            if _matches_before != _matches_after and "_convert_result" in st.session_state:
+                del st.session_state["_convert_result"]
 
     # ===== 随手记转换 =====
     st.subheader("3. 转换并下载")
