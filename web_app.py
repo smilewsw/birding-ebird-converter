@@ -367,7 +367,7 @@ import hashlib
 _file_hash = hashlib.md5(file_bytes).hexdigest()
 if st.session_state.get("_prev_file_hash") != _file_hash:
     for k in list(st.session_state.keys()):
-        if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_") or k.startswith("_prev_mode"):
+        if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_") or k.startswith("_prev_mode") or k == "_convert_result":
             del st.session_state[k]
     st.session_state["_prev_file_hash"] = _file_hash
     st.rerun()
@@ -536,31 +536,41 @@ if mode == "定点记":
     if st.button("🚀 开始转换", type="primary", use_container_width=True):
         try:
             csv_bytes, summary, output_df = convert_dataframe(df, include_software_info, matches)
-            st.success("✅ 转换成功！")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("记录数", summary['records'])
-            c2.metric("鸟种数", summary['species'])
-            c3.metric("地点数", summary['locations'])
-            c4, c5, c6 = st.columns(3)
-            c4.metric("heard", summary['heard'])
-            c5.metric("文件大小", f"{summary['size_kb']:.1f} KB")
-            c6.metric("省份", summary['provinces'])
-            if summary['size_kb'] > 1024:
-                st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
-            st.download_button(
-                "⬇️ 下载 eBird CSV", data=csv_bytes,
-                file_name=f"{os.path.splitext(uploaded.name)[0]}_ebird.csv",
-                mime="text/csv", type="primary", use_container_width=True,
-            )
-            with st.expander("👀 预览前 5 行"):
-                preview = output_df.head().copy()
-                preview.columns = ["俗名", "属", "拉丁名", "数量", "备注", "地点", "纬度", "经度",
-                                   "日期", "时间", "省份", "国家", "协议", "人数", "时长",
-                                   "完整", "距离", "面积", "提交备注"]
-                st.dataframe(preview, use_container_width=True)
+            st.session_state["_convert_result"] = {
+                'csv_bytes': csv_bytes,
+                'summary': summary,
+                'preview_df': output_df.head().copy(),
+                'filename': f"{os.path.splitext(uploaded.name)[0]}_ebird.csv",
+            }
         except Exception as e:
             st.error(f"❌ 转换失败：{e}")
             st.exception(e)
+
+    if "_convert_result" in st.session_state:
+        r = st.session_state["_convert_result"]
+        summary = r['summary']
+        st.success("✅ 转换成功！")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("记录数", summary['records'])
+        c2.metric("鸟种数", summary['species'])
+        c3.metric("地点数", summary['locations'])
+        c4, c5, c6 = st.columns(3)
+        c4.metric("heard", summary['heard'])
+        c5.metric("文件大小", f"{summary['size_kb']:.1f} KB")
+        c6.metric("省份", summary['provinces'])
+        if summary['size_kb'] > 1024:
+            st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
+        st.download_button(
+            "⬇️ 下载 eBird CSV", data=r['csv_bytes'],
+            file_name=r['filename'],
+            mime="text/csv", type="primary", use_container_width=True,
+        )
+        with st.expander("👀 预览前 5 行"):
+            preview = r['preview_df']
+            preview.columns = ["俗名", "属", "拉丁名", "数量", "备注", "地点", "纬度", "经度",
+                               "日期", "时间", "省份", "国家", "协议", "人数", "时长",
+                               "完整", "距离", "面积", "提交备注"]
+            st.dataframe(preview, use_container_width=True)
 
 # ===== 随手记模式 =====
 else:
@@ -789,30 +799,40 @@ else:
     if st.button("🚀 开始转换", type="primary", use_container_width=True):
         try:
             csv_bytes, summary, output_df = convert_incidental_dataframe(df, include_software_info, matches)
-            st.success("✅ 转换成功！")
-            c1, c2, c3 = st.columns(3)
-            c1.metric("记录数", summary['records'])
-            c2.metric("鸟种数", summary['species'])
-            c3.metric("坐标点数", summary['locations'])
-            c4, c5 = st.columns(2)
-            c4.metric("文件大小", f"{summary['size_kb']:.1f} KB")
-            c5.metric("省份", summary['provinces'])
-            if summary['size_kb'] > 1024:
-                st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
-            st.download_button(
-                "⬇️ 下载 eBird CSV", data=csv_bytes,
-                file_name=f"{os.path.splitext(uploaded.name)[0]}_ebird.csv",
-                mime="text/csv", type="primary", use_container_width=True,
-            )
-            with st.expander("👀 预览前 5 行"):
-                preview = output_df.head().copy()
-                preview.columns = ["俗名", "属", "拉丁名", "数量", "备注", "地点", "纬度", "经度",
-                                   "日期", "时间", "省份", "国家", "协议", "人数", "时长",
-                                   "完整", "距离", "面积", "提交备注"]
-                st.dataframe(preview, use_container_width=True)
+            st.session_state["_convert_result"] = {
+                'csv_bytes': csv_bytes,
+                'summary': summary,
+                'preview_df': output_df.head().copy(),
+                'filename': f"{os.path.splitext(uploaded.name)[0]}_ebird.csv",
+            }
         except Exception as e:
             st.error(f"❌ 转换失败：{e}")
             st.exception(e)
+
+    if "_convert_result" in st.session_state:
+        r = st.session_state["_convert_result"]
+        summary = r['summary']
+        st.success("✅ 转换成功！")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("记录数", summary['records'])
+        c2.metric("鸟种数", summary['species'])
+        c3.metric("坐标点数", summary['locations'])
+        c4, c5 = st.columns(2)
+        c4.metric("文件大小", f"{summary['size_kb']:.1f} KB")
+        c5.metric("省份", summary['provinces'])
+        if summary['size_kb'] > 1024:
+            st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
+        st.download_button(
+            "⬇️ 下载 eBird CSV", data=r['csv_bytes'],
+            file_name=r['filename'],
+            mime="text/csv", type="primary", use_container_width=True,
+        )
+        with st.expander("👀 预览前 5 行"):
+            preview = r['preview_df']
+            preview.columns = ["俗名", "属", "拉丁名", "数量", "备注", "地点", "纬度", "经度",
+                               "日期", "时间", "省份", "国家", "协议", "人数", "时长",
+                               "完整", "距离", "面积", "提交备注"]
+            st.dataframe(preview, use_container_width=True)
 
 st.markdown("---")
 st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter) | 热点匹配由 eBird API + 高德地图提供")
