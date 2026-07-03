@@ -291,7 +291,7 @@ if "_loc_matches" not in st.session_state:
 matches = st.session_state["_loc_matches"]
 
 # 统计
-matched_hotspot = sum(1 for v in matches.values() if v['source'] == 'eBird 热点')
+matched_hotspot = sum(1 for v in matches.values() if v['source'] in ('eBird 热点', 'eBird 热点（手动）'))
 matched_amap = sum(1 for v in matches.values() if v['source'] == '高德坐标')
 no_match = sum(1 for v in matches.values() if v['source'] == '无匹配')
 col_a, col_b, col_c = st.columns(3)
@@ -359,13 +359,15 @@ with st.expander("🔧 手动修正地点匹配（可选）"):
         )
 
         chosen = candidates[new_idx]
-        matches[loc] = {
-            'name': chosen['locName'],
-            'lat': chosen.get('lat', ''),
-            'lng': chosen.get('lng', ''),
-            'source': 'eBird 热点（手动）',
-            'candidates': candidates,
-        }
+        # 只在用户真正改动时覆盖，避免每次 rerun 重置所有匹配
+        if chosen['locName'] != current_name or m['source'] not in ('eBird 热点', 'eBird 热点（手动）'):
+            matches[loc] = {
+                'name': chosen['locName'],
+                'lat': chosen.get('lat', ''),
+                'lng': chosen.get('lng', ''),
+                'source': 'eBird 热点（手动）',
+                'candidates': candidates,
+            }
 
 # ===== 转换 =====
 st.subheader("3. 转换并下载")
