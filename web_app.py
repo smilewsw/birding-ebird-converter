@@ -17,6 +17,7 @@ from hotspot_matcher import (
     find_nearest_hotspot_local,
     reverse_geocode_amap,
     geocode_amap,
+    amap_get_province,
     PROVINCE_TO_ISO,
     _extract_cn,
 )
@@ -549,10 +550,14 @@ else:
 
     if st.button("🔍 开始匹配热点", type="primary"):
         with st.spinner("正在拉取 eBird 热点并匹配…"):
-            # Step 1: 按省份分组坐标
+            # Step 1: 按省份分组坐标（省列为空的用高德反查）
             province_coords: dict[str, list] = {}
             for c in coords_list:
-                p = c['province'] or '其他'
+                p = c['province']
+                if not p and amap_key:
+                    p = amap_get_province(c['lat'], c['lng'], amap_key) or ''
+                    c['province'] = p
+                p = p or '其他'
                 province_coords.setdefault(p, []).append(c)
 
             # Step 2: 并发拉取各省热点（1~2 秒搞定全部省份）

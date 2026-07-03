@@ -227,6 +227,30 @@ def reverse_geocode_amap(lat: float, lng: float, amap_key: str) -> str | None:
     return None
 
 
+def amap_get_province(lat: float, lng: float, amap_key: str) -> str | None:
+    """高德逆地理编码：GPS → 省份名称。
+
+    返回如 '北京市'、'河北省' 等。失败返回 None。
+    """
+    url = "https://restapi.amap.com/v3/geocode/regeo"
+    params = {
+        "key": amap_key,
+        "location": f"{lng},{lat}",
+        "extensions": "base",
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=5)
+        data = resp.json()
+        if data.get("status") == "1":
+            addr = data.get("regeocode", {}).get("addressComponent", {})
+            prov = addr.get("province", "")
+            if prov:
+                return prov
+    except Exception:
+        pass
+    return None
+
+
 # ---- 本地距离计算（避免逐个调 API） ----
 
 def _haversine_km(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
