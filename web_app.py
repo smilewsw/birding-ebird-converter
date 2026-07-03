@@ -318,7 +318,7 @@ def auto_match_locations(
                     'name': loc,
                     'lat': lat,
                     'lng': lng,
-                    'source': '高德坐标',
+                    'source': '高德地点',
                     'candidates': hotspots,
                 }
                 continue
@@ -412,7 +412,7 @@ if mode == "定点记":
 
     # 统计
     matched_hotspot = sum(1 for v in matches.values() if v['source'] in ('eBird 热点', 'eBird 热点（手动）'))
-    matched_amap = sum(1 for v in matches.values() if v['source'] == '高德坐标')
+    matched_amap = sum(1 for v in matches.values() if v['source'] == '高德地点')
     no_match = sum(1 for v in matches.values() if v['source'] == '无匹配')
     col_a, col_b, col_c = st.columns(3)
     col_a.metric("✅ 热点匹配", matched_hotspot)
@@ -588,7 +588,7 @@ else:
                                 'name': poi,
                                 'lat': round(c['lat'], 5),
                                 'lng': round(c['lng'], 5),
-                                'source': '高德坐标',
+                                'source': '高德地点',
                                 'candidates': [],
                             }
                         else:
@@ -596,7 +596,7 @@ else:
                                 'name': c['name'],
                                 'lat': round(c['lat'], 5),
                                 'lng': round(c['lng'], 5),
-                                'source': '原始坐标',
+                                'source': '原始地点',
                                 'candidates': [],
                             }
             elif no_match_coords:
@@ -605,7 +605,7 @@ else:
                         'name': c['name'],
                         'lat': round(c['lat'], 5),
                         'lng': round(c['lng'], 5),
-                        'source': '原始坐标',
+                        'source': '原始地点',
                         'candidates': [],
                     }
 
@@ -620,12 +620,12 @@ else:
 
     # 统计
     matched_hotspot = sum(1 for v in matches.values() if v['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）'))
-    matched_amap = sum(1 for v in matches.values() if v['source'] == '高德坐标')
-    raw_coord = sum(1 for v in matches.values() if v['source'] == '原始坐标')
+    matched_amap = sum(1 for v in matches.values() if v['source'] == '高德地点')
+    raw_coord = sum(1 for v in matches.values() if v['source'] == '原始地点')
     col_a, col_b, col_c = st.columns(3)
     col_a.metric("✅ 热点匹配", matched_hotspot)
     col_b.metric("📍 高德", matched_amap)
-    col_c.metric("📌 原始坐标", raw_coord)
+    col_c.metric("📌 原始地点", raw_coord)
 
     # 匹配结果表格
     st.markdown("#### 匹配结果（可修改）")
@@ -636,7 +636,7 @@ else:
         if m['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）'):
             current_label = f"[热点] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
         else:
-            current_label = f"[坐标] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
+            current_label = f"[地点] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
         edit_rows.append({
             "原始地点": c['name'],
             "坐标": f"({c['lat']:.4f}, {c['lng']:.4f})",
