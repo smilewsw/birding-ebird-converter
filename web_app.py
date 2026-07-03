@@ -568,16 +568,20 @@ else:
             # 存入 session_state 供手动修正使用
             st.session_state["_province_hotspots"] = province_hotspots
 
+            # 诊断：显示各省热点加载情况
+            hotspot_summary = ", ".join(f"{k}:{len(v)}" for k, v in province_hotspots.items())
+            st.caption(f"已加载 eBird 热点：{hotspot_summary}")
+
             # Step 3: 高德 POI 名称为主，eBird 热点作为候选
             coord_matches = {}
             all_coords = [c for coords in province_coords.values() for c in coords]
 
             if amap_key:
-                # 并发：每个坐标同时查高德 POI + eBird 最近热点
+                # 并发：每个坐标同时查高德 POI + eBird 最近热点（10km 半径）
                 def _match_one(c):
                     poi = reverse_geocode_amap(c['lat'], c['lng'], amap_key)
                     hotspots = province_hotspots.get(c['province'] or '其他', [])
-                    nearest = find_nearest_hotspot_local(c['lat'], c['lng'], hotspots, max_dist_km=5)
+                    nearest = find_nearest_hotspot_local(c['lat'], c['lng'], hotspots, max_dist_km=10)
                     return c['key'], c, poi, nearest
 
                 with ThreadPoolExecutor(max_workers=10) as pool:
