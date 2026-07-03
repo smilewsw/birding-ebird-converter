@@ -315,7 +315,6 @@ def convert_incidental_dataframe(
 
     # 第三步：生成 eBird 数据行
     ebird_data = []
-    merge_count = 0
     for i, ri in enumerate(row_infos):
         if ri['can_merge']:
             date_str = ri['record_time'].strftime('%Y-%m-%d')
@@ -323,8 +322,6 @@ def convert_incidental_dataframe(
             info = merged_info[key]
             start_time = info['start_time']
             duration = info['duration']
-            if len(merge_groups[key]) > 1:
-                merge_count += 1
         else:
             start_time = ri['record_time']
             duration = 1
