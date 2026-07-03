@@ -624,7 +624,7 @@ else:
     raw_coord = sum(1 for v in matches.values() if v['source'] == '原始坐标')
     col_a, col_b, col_c = st.columns(3)
     col_a.metric("✅ 热点匹配", matched_hotspot)
-    col_b.metric("📍 高德", matched_amap)
+    col_b.metric("📍 高德地点", matched_amap)
     col_c.metric("📌 原始坐标", raw_coord)
 
     # 匹配结果表格
