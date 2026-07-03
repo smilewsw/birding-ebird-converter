@@ -4,6 +4,7 @@ import pandas as pd
 import io
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 把 skill 脚本所在目录加入路径
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -533,24 +534,32 @@ else:
     if st.button("🔍 开始匹配热点", type="primary"):
         with st.spinner("正在按坐标搜索 eBird 热点…"):
             coord_matches = {}
-            for c in coords_list:
+
+            # 并发请求，大幅提速
+            def _query(c):
                 nearest = find_nearest_hotspot(c['lat'], c['lng'], ebird_key, dist=5)
-                if nearest:
-                    coord_matches[c['key']] = {
-                        'name': nearest['locName'],
-                        'lat': nearest.get('lat', round(c['lat'], 5)),
-                        'lng': nearest.get('lng', round(c['lng'], 5)),
-                        'source': 'eBird 热点（坐标）',
-                        'candidates': [nearest],
-                    }
-                else:
-                    coord_matches[c['key']] = {
-                        'name': c['name'],
-                        'lat': round(c['lat'], 5),
-                        'lng': round(c['lng'], 5),
-                        'source': '原始坐标',
-                        'candidates': [],
-                    }
+                return c['key'], c, nearest
+
+            with ThreadPoolExecutor(max_workers=10) as pool:
+                futures = {pool.submit(_query, c): c for c in coords_list}
+                for future in as_completed(futures):
+                    key, c, nearest = future.result()
+                    if nearest:
+                        coord_matches[key] = {
+                            'name': nearest['locName'],
+                            'lat': nearest.get('lat', round(c['lat'], 5)),
+                            'lng': nearest.get('lng', round(c['lng'], 5)),
+                            'source': 'eBird 热点（坐标）',
+                            'candidates': [nearest],
+                        }
+                    else:
+                        coord_matches[key] = {
+                            'name': c['name'],
+                            'lat': round(c['lat'], 5),
+                            'lng': round(c['lng'], 5),
+                            'source': '原始坐标',
+                            'candidates': [],
+                        }
             st.session_state["_loc_matches"] = coord_matches
 
     if "_loc_matches" not in st.session_state:
