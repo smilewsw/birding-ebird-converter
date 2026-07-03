@@ -108,9 +108,9 @@ def convert_dataframe(
     all_one_reports = set()
     if all_one_to_x and '报告编号' in df.columns:
         for report_id, group in df.groupby('报告编号'):
-            counts = group['鸟种数量'].dropna()
+            counts = pd.to_numeric(group['鸟种数量'], errors='coerce').dropna()
             if len(counts) > 0 and (counts == 1).all():
-                all_one_reports.add(report_id)
+                all_one_reports.add(str(report_id))
 
     x_count = 0
 
