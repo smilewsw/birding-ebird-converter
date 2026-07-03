@@ -61,7 +61,7 @@ with st.expander("📖 使用说明", expanded=False):
     1. 打开 [ebird.org/import](https://ebird.org/import/status/all.htm)
     2. 上传 CSV，格式选「eBird 记录格式（扩展）」
     3. 「修复位置」步骤会根据 CSV 中的 GPS 自动定位，点击确认即可
-    💡 导入时语言选「中文（Sìm.）」，大部分鸟种可自动匹配
+    💡 eBird 语言选「中文（Sìm.）」，大部分鸟种可自动匹配
     """)
 
 
