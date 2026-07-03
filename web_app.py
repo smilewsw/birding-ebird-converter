@@ -683,11 +683,11 @@ else:
     with st.expander("🔧 手动修正地点匹配（可选）"):
         st.caption("💡 提示：选择框可直接输入关键字模糊查询热点")
         for c in coords_list:
-        m = matches.get(c['key'])
-        if not m:
-            continue
-        candidates = m.get('candidates', [])
-        has_hotspot_source = m['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）')
+            m = matches.get(c['key'])
+            if not m:
+                continue
+            candidates = m.get('candidates', [])
+            has_hotspot_source = m['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）')
             if not candidates:
                 new_name = st.text_input(
                     f"🔴 无候选热点 「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →",
