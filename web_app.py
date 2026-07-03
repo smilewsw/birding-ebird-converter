@@ -692,7 +692,12 @@ else:
             candidate_labels = [f"{_extract_cn(h['locName'])}  ({h.get('lat',''):.4f},{h.get('lng',''):.4f})" for h in candidates]
             options = ["⸺ 保持当前 ⸺"] + candidate_labels
 
-            if has_hotspot_source:
+            # 检查 widget 缓存值：用户是否已选了热点
+            widget_key = f"_sel_{c['key']}"
+            prev_sel = st.session_state.get(widget_key, "⸺ 保持当前 ⸺")
+            already_selected = prev_sel != "⸺ 保持当前 ⸺"
+
+            if has_hotspot_source or already_selected:
                 # 已选热点：定位到当前热点
                 try:
                     current_idx = next(i for i, h in enumerate(candidates) if h['locName'] == m['name'])
