@@ -575,6 +575,7 @@ else:
             # Step 3: 先本地 Haversine 匹配热点（瞬间完成），没匹配上的才调高德
             coord_matches = {}
             no_match_coords = []
+            all_coords = [c for coords in province_coords.values() for c in coords]
 
             for c in all_coords:
                 hotspots = province_hotspots.get(c['province'] or '其他', [])
