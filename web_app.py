@@ -4,6 +4,7 @@ import pandas as pd
 import io
 import os
 import sys
+import hashlib
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 把 skill 脚本所在目录加入路径
@@ -363,7 +364,6 @@ except Exception as e:
     st.stop()
 
 # 上传新文件时清除旧文件的匹配缓存（用文件内容哈希判断，同名不同内容也能识别）
-import hashlib
 _file_hash = hashlib.md5(file_bytes).hexdigest()
 if st.session_state.get("_prev_file_hash") != _file_hash:
     for k in list(st.session_state.keys()):
@@ -398,7 +398,7 @@ mode = manual_mode
 if st.session_state.get("_prev_mode") != mode:
     # 清除所有匹配相关的缓存
     for k in list(st.session_state.keys()):
-        if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_"):
+        if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_") or k == "_convert_result":
             del st.session_state[k]
         if k.startswith("_prev_mode"):
             continue  # 下面马上要更新
@@ -529,6 +529,9 @@ if mode == "定点记":
                         'source': 'eBird 热点（手动）',
                         'candidates': candidates,
                     }
+
+        # 确保修改同步到 session_state
+        st.session_state["_loc_matches"] = matches
 
     # ===== 定点记转换 =====
     st.subheader("3. 转换并下载")
