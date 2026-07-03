@@ -668,6 +668,7 @@ else:
 
     # 手动修正
     with st.expander("🔧 手动修正地点匹配（可选）"):
+        st.caption("💡 提示：选择框可直接输入关键字模糊查询热点")
         for c in coords_list:
             m = matches[c['key']]
             candidates = m.get('candidates', [])
