@@ -685,7 +685,6 @@ else:
             candidates = m.get('candidates', [])
             has_hotspot_source = m['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）')
             if not candidates:
-                # 无候选热点时，提供手动输入（加醒目标识）
                 new_name = st.text_input(
                     f"🔴 无候选热点 「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →",
                     value=m['name'],
@@ -701,24 +700,35 @@ else:
                     }
                 continue
 
-            # 构造候选列表：高德/原始来源时加一个「保持当前」兜底选项
+            # 统一用一个 selectbox，标签根据是否已匹配热点动态显示
             candidate_labels = [f"{_extract_cn(h['locName'])}  ({h.get('lat',''):.4f},{h.get('lng',''):.4f})" for h in candidates]
             if has_hotspot_source:
-                # 已选热点：在热点列表中定位当前项
+                # 已选热点：直接在热点列表中定位
+                options = candidate_labels
                 current_name = m['name']
                 try:
                     current_idx = next(i for i, h in enumerate(candidates) if h['locName'] == current_name)
                 except StopIteration:
                     current_idx = 0
-                new_idx = st.selectbox(
-                    f"「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →",
-                    options=range(len(candidates)),
-                    format_func=lambda i, labels=candidate_labels: labels[i],
-                    index=min(current_idx, len(candidates) - 1),
-                    key=f"_sel_{c['key']}",
-                )
-                chosen = candidates[new_idx]
-                if chosen['locName'] != current_name:
+                label = f"「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →"
+                default_idx = min(current_idx, len(options) - 1)
+            else:
+                # 非热点来源：加「保持当前」选项
+                options = ["⸺ 保持当前 ⸺"] + candidate_labels
+                label = f"⚠️ 未匹配热点 「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →"
+                default_idx = 0
+
+            new_label = st.selectbox(
+                label,
+                options=options,
+                index=default_idx,
+                key=f"_sel_{c['key']}",
+            )
+            # 处理选择
+            if has_hotspot_source:
+                chosen_idx = options.index(new_label)
+                chosen = candidates[chosen_idx]
+                if chosen['locName'] != m['name']:
                     matches[c['key']] = {
                         'name': chosen['locName'],
                         'lat': chosen.get('lat', ''),
@@ -727,17 +737,9 @@ else:
                         'candidates': candidates,
                     }
             else:
-                # 非热点来源：默认保持当前，加 ⚠️ 提醒有候选热点可切换
-                extended_labels = ["⸺ 保持当前 ⸺"] + candidate_labels
-                new_idx = st.selectbox(
-                    f"⚠️ 未匹配热点 「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →",
-                    options=range(len(extended_labels)),
-                    format_func=lambda i, labels=extended_labels: labels[i],
-                    index=0,
-                    key=f"_sel_{c['key']}",
-                )
-                if new_idx > 0:
-                    chosen = candidates[new_idx - 1]
+                if new_label != "⸺ 保持当前 ⸺":
+                    chosen_idx = candidate_labels.index(new_label)
+                    chosen = candidates[chosen_idx]
                     matches[c['key']] = {
                         'name': chosen['locName'],
                         'lat': chosen.get('lat', ''),
