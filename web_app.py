@@ -389,6 +389,8 @@ if st.session_state.get("_prev_mode") != mode:
         if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_"):
             del st.session_state[k]
     st.session_state["_prev_mode"] = mode
+    # 强制重新渲染，避免旧模式残留
+    st.rerun()
 
 # ===== 定点记模式 =====
 if mode == "定点记":
@@ -431,7 +433,9 @@ if mode == "定点记":
     st.markdown("#### 匹配结果（可修改）")
     edit_rows = []
     for loc in unique_locations:
-        m = matches[loc]
+        m = matches.get(loc)
+        if not m:
+            continue
         current_label = m['name']
         if m['source'] in ('eBird 热点', 'eBird 热点（手动）') and m.get('lat'):
             current_label = f"[热点] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
@@ -454,7 +458,9 @@ if mode == "定点记":
     # 手动修正
     with st.expander("🔧 手动修正地点匹配（可选）"):
         for loc in unique_locations:
-            m = matches[loc]
+            m = matches.get(loc)
+            if not m:
+                continue
             candidates = m.get('candidates', [])
             if not candidates:
                 new_name = st.text_input(
@@ -645,7 +651,9 @@ else:
     st.markdown("#### 匹配结果（可修改）")
     edit_rows = []
     for c in coords_list:
-        m = matches[c['key']]
+        m = matches.get(c['key'])
+        if not m:
+            continue
         current_label = m['name']
         if m['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）'):
             current_label = f"[热点] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
@@ -675,9 +683,11 @@ else:
     with st.expander("🔧 手动修正地点匹配（可选）"):
         st.caption("💡 提示：选择框可直接输入关键字模糊查询热点")
         for c in coords_list:
-            m = matches[c['key']]
-            candidates = m.get('candidates', [])
-            has_hotspot_source = m['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）')
+        m = matches.get(c['key'])
+        if not m:
+            continue
+        candidates = m.get('candidates', [])
+        has_hotspot_source = m['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）')
             if not candidates:
                 new_name = st.text_input(
                     f"🔴 无候选热点 「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →",
