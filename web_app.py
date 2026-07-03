@@ -705,7 +705,7 @@ else:
                 label = f"「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →"
             else:
                 default_idx = 0
-                label = f"⚠️ 未匹配热点 「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →"
+                label = f"「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) ⚠️ 未匹配热点 →"
 
             new_label = st.selectbox(
                 label,
