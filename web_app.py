@@ -662,9 +662,9 @@ else:
             candidates = m.get('candidates', [])
             has_hotspot_source = m['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）')
             if not candidates:
-                # 无候选热点时，提供手动输入
+                # 无候选热点时，提供手动输入（加醒目标识）
                 new_name = st.text_input(
-                    f"「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →",
+                    f"🔴 无候选热点 「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →",
                     value=m['name'],
                     key=f"_sel_{c['key']}",
                 )
@@ -704,10 +704,10 @@ else:
                         'candidates': candidates,
                     }
             else:
-                # 非热点来源：默认保持当前，热点从 index=1 开始
+                # 非热点来源：默认保持当前，加 ⚠️ 提醒有候选热点可切换
                 extended_labels = ["⸺ 保持当前 ⸺"] + candidate_labels
                 new_idx = st.selectbox(
-                    f"「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →",
+                    f"⚠️ 未匹配热点 「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →",
                     options=range(len(extended_labels)),
                     format_func=lambda i, labels=extended_labels: labels[i],
                     index=0,
