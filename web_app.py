@@ -26,29 +26,26 @@ st.set_page_config(
 st.title("🦜 观鸟记录中心 → eBird 转换器")
 st.markdown("把中国观鸟记录中心（birdreport.cn）导出的 Excel 转换为 eBird 批量导入格式，**自动匹配 eBird 热点**。")
 
-# ---- API Keys ----
-def _get_key(name: str, env_var: str, label: str) -> str:
-    """优先从 Streamlit Secrets 读取，否则从用户输入框读取。"""
+# ---- API Keys（优先 Secrets，兜底硬编码） ----
+def _get_key(name: str) -> str:
+    """优先从 Streamlit Secrets 读取，否则用硬编码 Key。"""
     try:
         return st.secrets[name]
     except Exception:
         pass
-    env_val = os.environ.get(env_var, "")
+    env_val = os.environ.get(name, "")
     if env_val:
         return env_val
-    key = getattr(st.session_state, f"_key_{name}", "")
-    if not key:
-        key = st.text_input(label, type="password", help=f"不会上传到服务器。可设置 {env_var} 环境变量代替。")
-        st.session_state[f"_key_{name}"] = key
-    return key
+    # 硬编码兜底
+    _FALLBACK = {
+        "EBIRD_API_KEY": "qbkd2uh5dfnm",
+        "AMAP_API_KEY": "0407b7c846eb4d89e0b34ae5442ee447",
+    }
+    return _FALLBACK.get(name, "")
 
 
-ebird_key = _get_key("EBIRD_API_KEY", "EBIRD_API_KEY", "eBird API Key")
-amap_key = _get_key("AMAP_API_KEY", "AMAP_API_KEY", "高德地图 API Key（可选，无匹配热点时做地理编码兜底）")
-
-if not ebird_key:
-    st.info("请输入 eBird API Key 以启用热点自动匹配。在 ebird.org/api/keygen 免费获取。")
-    st.stop()
+ebird_key = _get_key("EBIRD_API_KEY")
+amap_key = _get_key("AMAP_API_KEY")
 
 # ---- 缓存：拉取省份热点 ----
 @st.cache_data(ttl=3600, show_spinner="正在加载 eBird 热点数据…")
