@@ -572,59 +572,50 @@ else:
             hotspot_summary = ", ".join(f"{k}:{len(v)}" for k, v in province_hotspots.items())
             st.caption(f"已加载 eBird 热点：{hotspot_summary}")
 
-            # Step 3: 高德 POI 名称为主，eBird 热点作为候选
+            # Step 3: 先本地 Haversine 匹配热点（瞬间完成），没匹配上的才调高德
             coord_matches = {}
-            all_coords = [c for coords in province_coords.values() for c in coords]
+            no_match_coords = []
 
-            if amap_key:
-                # 并发：每个坐标同时查高德 POI + eBird 最近热点（10km 半径）
-                def _match_one(c):
+            for c in all_coords:
+                hotspots = province_hotspots.get(c['province'] or '其他', [])
+                nearest = find_nearest_hotspot_local(c['lat'], c['lng'], hotspots, max_dist_km=5)
+                if nearest:
+                    coord_matches[c['key']] = {
+                        'name': nearest['locName'],
+                        'lat': round(float(nearest.get('lat', c['lat'])), 5),
+                        'lng': round(float(nearest.get('lng', c['lng'])), 5),
+                        'source': 'eBird 热点（坐标）',
+                        'candidates': hotspots,
+                    }
+                else:
+                    no_match_coords.append(c)
+
+            # Step 4: 仅对未匹配热点的坐标调高德逆地理编码（数量少，快）
+            if no_match_coords and amap_key:
+                def _amap_fallback(c):
                     poi = reverse_geocode_amap(c['lat'], c['lng'], amap_key)
-                    hotspots = province_hotspots.get(c['province'] or '其他', [])
-                    nearest = find_nearest_hotspot_local(c['lat'], c['lng'], hotspots, max_dist_km=5)
-                    return c['key'], c, poi, nearest
+                    return c['key'], c, poi
 
                 with ThreadPoolExecutor(max_workers=10) as pool:
-                    futures = [pool.submit(_match_one, c) for c in all_coords]
+                    futures = [pool.submit(_amap_fallback, c) for c in no_match_coords]
                     for f in as_completed(futures):
-                        key, c, poi, nearest = f.result()
+                        key, c, poi = f.result()
                         hotspots = province_hotspots.get(c['province'] or '其他', [])
-                        if nearest:
-                            # 10km 内有 eBird 热点 → 优先用热点名
-                            coord_matches[key] = {
-                                'name': nearest['locName'],
-                                'lat': round(float(nearest.get('lat', c['lat'])), 5),
-                                'lng': round(float(nearest.get('lng', c['lng'])), 5),
-                                'source': 'eBird 热点（坐标）',
-                                'candidates': hotspots,
-                            }
-                        elif poi:
-                            # 无热点但有高德 POI
-                            coord_matches[key] = {
-                                'name': poi,
-                                'lat': round(c['lat'], 5),
-                                'lng': round(c['lng'], 5),
-                                'source': '高德地点',
-                                'candidates': hotspots,
-                            }
-                        else:
-                            coord_matches[key] = {
-                                'name': c['name'],
-                                'lat': round(c['lat'], 5),
-                                'lng': round(c['lng'], 5),
-                                'source': '原始坐标',
-                                'candidates': hotspots,
-                            }
-            else:
-                # 无高德 Key：直接用 eBird 热点或行政区名
-                for c in all_coords:
+                        coord_matches[key] = {
+                            'name': poi or c['name'],
+                            'lat': round(c['lat'], 5),
+                            'lng': round(c['lng'], 5),
+                            'source': '高德地点' if poi else '原始坐标',
+                            'candidates': hotspots,
+                        }
+            elif no_match_coords:
+                for c in no_match_coords:
                     hotspots = province_hotspots.get(c['province'] or '其他', [])
-                    nearest = find_nearest_hotspot_local(c['lat'], c['lng'], hotspots, max_dist_km=5)
                     coord_matches[c['key']] = {
-                        'name': nearest['locName'] if nearest else c['name'],
+                        'name': c['name'],
                         'lat': round(c['lat'], 5),
                         'lng': round(c['lng'], 5),
-                        'source': 'eBird 热点（坐标）' if nearest else '原始坐标',
+                        'source': '原始坐标',
                         'candidates': hotspots,
                     }
 
