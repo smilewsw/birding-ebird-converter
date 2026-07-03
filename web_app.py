@@ -471,7 +471,7 @@ if mode == "定点记":
 
     # 手动修正
     with st.expander("🔧 手动修正地点匹配（可选）"):
-        with st.container(height=400):
+        with st.container(height=800):
             st.caption("💡 提示：选择框可直接输入关键字模糊查询热点")
             for loc in unique_locations:
                 m = matches.get(loc)
@@ -725,7 +725,7 @@ else:
 
     # 手动修正
     with st.expander("🔧 手动修正地点匹配（可选）"):
-        with st.container(height=400):
+        with st.container(height=800):
             st.caption("💡 提示：选择框可直接输入关键字模糊查询热点")
             for c in coords_list:
                 m = matches.get(c['key'])
