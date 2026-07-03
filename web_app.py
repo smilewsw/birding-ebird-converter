@@ -532,7 +532,6 @@ else:
     st.success(f"共 **{len(coord_set)}** 个不同坐标点")
 
     st.subheader("2. 按坐标匹配 eBird 热点")
-    st.markdown("先拉取全省热点到本地再匹配，比逐个调 API 快 50 倍。")
 
     if st.button("🔍 开始匹配热点", type="primary"):
         with st.spinner("正在拉取 eBird 热点并匹配…"):
