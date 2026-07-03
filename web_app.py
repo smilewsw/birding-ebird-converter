@@ -201,16 +201,20 @@ def convert_incidental_dataframe(
     include_sw: bool,
     location_map: dict[tuple, dict] | None = None,
 ):
-    """把随手记 DataFrame 转成 eBird CSV。location_map 为 {(lat,lng): {name, lat, lng}}。"""
+    """把随手记 DataFrame 转成 eBird CSV。location_map 为 {(lat,lng): {name, lat, lng}}。
+    同一天同一热点的记录会合并为一条 checklist。"""
     df.columns = [str(c).strip() for c in df.columns]
     if location_map is None:
         location_map = {}
 
-    ebird_data = []
     special_map = {"鹗": "鹗 (鱼鹰)", "隼": "隼形目未知"}
     species_set = set()
     coord_set = set()
 
+    HOTSPOT_SOURCES = ('eBird 热点（坐标）', 'eBird 热点（手动）')
+
+    # 第一步：遍历每行，确定地点信息 + 是否可合并
+    row_infos = []
     for _, row in df.iterrows():
         common_name = str(row.get('中文名', '')).strip()
         if common_name in special_map:
@@ -223,7 +227,6 @@ def convert_incidental_dataframe(
         obs_note = str(row.get('描述', '')).strip()
         species_set.add(common_name)
 
-        # 火星坐标
         gcj_lat = row.get('纬度（火星）', None)
         gcj_lng = row.get('经度（火星）', None)
         has_coords = pd.notnull(gcj_lat) and pd.notnull(gcj_lng)
@@ -231,44 +234,102 @@ def convert_incidental_dataframe(
         if coord_key:
             coord_set.add(coord_key)
 
-        # 地点：热点名 > 省/市/县拼接
         loc_info = location_map.get(coord_key, {}) if coord_key else {}
-        loc_name = loc_info.get('name', '')
-        if not loc_name:
-            parts = [str(row.get('省', '')).strip(),
-                     str(row.get('州/市', '')).strip(),
-                     str(row.get('区/县', '')).strip()]
-            loc_name = ''.join(p for p in parts if p)
-        loc_lat = loc_info.get('lat', round(float(gcj_lat), 6) if has_coords else '')
-        loc_lng = loc_info.get('lng', round(float(gcj_lng), 6) if has_coords else '')
+        loc_source = loc_info.get('source', '')
+        can_merge = loc_source in HOTSPOT_SOURCES
 
-        # 时间
+        if can_merge:
+            loc_name = loc_info.get('name', '')
+            loc_lat = loc_info.get('lat', '')
+            loc_lng = loc_info.get('lng', '')
+        else:
+            loc_name = loc_info.get('name', '')
+            if not loc_name:
+                parts = [str(row.get('省', '')).strip(),
+                         str(row.get('州/市', '')).strip(),
+                         str(row.get('区/县', '')).strip()]
+                loc_name = ''.join(p for p in parts if p)
+            loc_lat = loc_info.get('lat', round(float(gcj_lat), 6) if has_coords else '')
+            loc_lng = loc_info.get('lng', round(float(gcj_lng), 6) if has_coords else '')
+
         record_time = pd.to_datetime(row['记录时间'])
 
-        # 备注
         report_id = str(row.get('报告编号', 'Unknown'))
         if include_sw:
             remarks = f"Originally uploaded to birdreport.cn, record id = {report_id}"
         else:
             remarks = f"birdreport.cn record id = {report_id}"
 
+        row_infos.append({
+            'common_name': common_name,
+            'sci_name': sci_name,
+            'count': count,
+            'obs_note': obs_note,
+            'loc_name': loc_name,
+            'loc_lat': loc_lat,
+            'loc_lng': loc_lng,
+            'record_time': record_time,
+            'province': str(row.get('省', '')).strip(),
+            'remarks': remarks,
+            'can_merge': can_merge,
+        })
+
+    # 第二步：合并同一天同一热点的记录
+    # 分组 key = (loc_name, date)，仅对 can_merge=True 的行
+    merge_groups = {}  # {(loc_name, date_str): [row_indices]}
+    for i, ri in enumerate(row_infos):
+        if ri['can_merge']:
+            date_str = ri['record_time'].strftime('%Y-%m-%d')
+            key = (ri['loc_name'], date_str)
+            merge_groups.setdefault(key, []).append(i)
+
+    # 为每个合并组计算统一的 start_time 和 duration
+    merged_info = {}  # {group_key: {start_time, duration}}
+    for key, indices in merge_groups.items():
+        times = [row_infos[i]['record_time'] for i in indices]
+        earliest = min(times)
+        latest = max(times)
+        duration = int((latest - earliest).total_seconds() / 60)
+        if duration < 1:
+            duration = 1
+        merged_info[key] = {
+            'start_time': earliest,
+            'duration': duration,
+        }
+
+    # 第三步：生成 eBird 数据行
+    ebird_data = []
+    merge_count = 0
+    for i, ri in enumerate(row_infos):
+        if ri['can_merge']:
+            date_str = ri['record_time'].strftime('%Y-%m-%d')
+            key = (ri['loc_name'], date_str)
+            info = merged_info[key]
+            start_time = info['start_time']
+            duration = info['duration']
+            if len(merge_groups[key]) > 1:
+                merge_count += 1
+        else:
+            start_time = ri['record_time']
+            duration = 1
+
         items = [''] * 19
-        items[0] = common_name
-        items[2] = sci_name
-        items[3] = count
-        items[4] = obs_note
-        items[5] = loc_name
-        items[6] = loc_lat
-        items[7] = loc_lng
-        items[8] = record_time.strftime('%m/%d/%Y')
-        items[9] = record_time.strftime('%H:%M')
-        items[10] = province_convert(row['省'])
+        items[0] = ri['common_name']
+        items[2] = ri['sci_name']
+        items[3] = ri['count']
+        items[4] = ri['obs_note']
+        items[5] = ri['loc_name']
+        items[6] = ri['loc_lat']
+        items[7] = ri['loc_lng']
+        items[8] = start_time.strftime('%m/%d/%Y')
+        items[9] = start_time.strftime('%H:%M')
+        items[10] = province_convert(ri['province'])
         items[11] = 'CN'
         items[12] = 'incidental'
         items[13] = '1'
-        items[14] = 1
+        items[14] = duration
         items[15] = 'Y'
-        items[18] = remarks
+        items[18] = ri['remarks']
         ebird_data.append(items)
 
     output_df = pd.DataFrame(ebird_data)
@@ -276,12 +337,20 @@ def convert_incidental_dataframe(
     output_df.to_csv(csv_buf, index=False, header=False, encoding='utf-8-sig')
     csv_bytes = csv_buf.getvalue().encode('utf-8-sig')
 
+    # 统计合并后的 checklist 数
+    checklist_count = len(set(
+        (ri['loc_name'], ri['record_time'].strftime('%Y-%m-%d'))
+        for ri in row_infos if ri['can_merge']
+    )) + sum(1 for ri in row_infos if not ri['can_merge'])
+
     return csv_bytes, {
         'records': len(ebird_data),
         'species': len(species_set),
         'locations': len(coord_set),
         'provinces': df['省'].nunique(),
         'heard': 0,
+        'merge_count': merge_count,
+        'checklists': checklist_count,
         'size_kb': len(csv_bytes) / 1024,
     }, output_df
 
@@ -842,9 +911,10 @@ else:
         c1.metric("记录数", summary['records'])
         c2.metric("鸟种数", summary['species'])
         c3.metric("坐标点数", summary['locations'])
-        c4, c5 = st.columns(2)
-        c4.metric("文件大小", f"{summary['size_kb']:.1f} KB")
-        c5.metric("省份", summary['provinces'])
+        c4, c5, c6 = st.columns(3)
+        c4.metric("合并记录数", summary.get('merge_count', 0))
+        c5.metric("文件大小", f"{summary['size_kb']:.1f} KB")
+        c6.metric("省份", summary['provinces'])
         if summary['size_kb'] > 1024:
             st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
         st.download_button(
