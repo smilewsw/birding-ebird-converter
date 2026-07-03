@@ -700,33 +700,32 @@ else:
                     }
                 continue
 
-            # 统一用一个 selectbox，标签根据是否已匹配热点动态显示
+            # 统一 options：始终带「保持当前」选项，避免切换分支时 widget key 冲突
             candidate_labels = [f"{_extract_cn(h['locName'])}  ({h.get('lat',''):.4f},{h.get('lng',''):.4f})" for h in candidates]
+            options = ["⸺ 保持当前 ⸺"] + candidate_labels
+
             if has_hotspot_source:
-                # 已选热点：直接在热点列表中定位
-                options = candidate_labels
-                current_name = m['name']
+                # 已选热点：定位到当前热点
                 try:
-                    current_idx = next(i for i, h in enumerate(candidates) if h['locName'] == current_name)
+                    current_idx = next(i for i, h in enumerate(candidates) if h['locName'] == m['name'])
+                    default_idx = current_idx + 1  # +1 跳过「保持当前」
                 except StopIteration:
-                    current_idx = 0
+                    default_idx = 0
                 label = f"「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →"
-                default_idx = min(current_idx, len(options) - 1)
             else:
-                # 非热点来源：加「保持当前」选项
-                options = ["⸺ 保持当前 ⸺"] + candidate_labels
-                label = f"⚠️ 未匹配热点 「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →"
                 default_idx = 0
+                label = f"⚠️ 未匹配热点 「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →"
 
             new_label = st.selectbox(
                 label,
                 options=options,
-                index=default_idx,
+                index=min(default_idx, len(options) - 1),
                 key=f"_sel_{c['key']}",
             )
+
             # 处理选择
-            if has_hotspot_source:
-                chosen_idx = options.index(new_label)
+            if new_label != "⸺ 保持当前 ⸺":
+                chosen_idx = candidate_labels.index(new_label)
                 chosen = candidates[chosen_idx]
                 if chosen['locName'] != m['name']:
                     matches[c['key']] = {
@@ -736,17 +735,13 @@ else:
                         'source': 'eBird 热点（手动）',
                         'candidates': candidates,
                     }
-            else:
-                if new_label != "⸺ 保持当前 ⸺":
-                    chosen_idx = candidate_labels.index(new_label)
-                    chosen = candidates[chosen_idx]
-                    matches[c['key']] = {
-                        'name': chosen['locName'],
-                        'lat': chosen.get('lat', ''),
-                        'lng': chosen.get('lng', ''),
-                        'source': 'eBird 热点（手动）',
-                        'candidates': candidates,
-                    }
+            elif has_hotspot_source and m['source'] == 'eBird 热点（手动）':
+                # 用户从热点切回「保持当前」→ 恢复为原始匹配
+                # 不做处理，保持当前值
+                pass
+
+        # 确保修改同步到 session_state
+        st.session_state["_loc_matches"] = matches
 
     # ===== 随手记转换 =====
     st.subheader("3. 转换并下载")
