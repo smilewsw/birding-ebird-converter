@@ -581,7 +581,7 @@ else:
                 def _match_one(c):
                     poi = reverse_geocode_amap(c['lat'], c['lng'], amap_key)
                     hotspots = province_hotspots.get(c['province'] or '其他', [])
-                    nearest = find_nearest_hotspot_local(c['lat'], c['lng'], hotspots, max_dist_km=10)
+                    nearest = find_nearest_hotspot_local(c['lat'], c['lng'], hotspots, max_dist_km=5)
                     return c['key'], c, poi, nearest
 
                 with ThreadPoolExecutor(max_workers=10) as pool:
