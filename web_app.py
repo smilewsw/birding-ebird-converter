@@ -345,7 +345,7 @@ def auto_match_locations(
 
 st.subheader("1. 上传 Excel 文件")
 uploaded = st.file_uploader(
-    "选择从 birdreport.cn 导出的 Excel 文件（定点记 / 随手记均可）",
+    "选择从中国观鸟记录中心（birdreport.cn）导出的 Excel 文件（定点记 / 随手记均可）",
     type=["xls", "xlsx"],
 )
 
