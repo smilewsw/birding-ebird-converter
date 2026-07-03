@@ -568,10 +568,6 @@ else:
             # 存入 session_state 供手动修正使用
             st.session_state["_province_hotspots"] = province_hotspots
 
-            # 诊断：显示各省热点加载情况
-            hotspot_summary = ", ".join(f"{k}:{len(v)}" for k, v in province_hotspots.items())
-            st.caption(f"已加载 eBird 热点：{hotspot_summary}")
-
             # Step 3: 先本地 Haversine 匹配热点（瞬间完成），没匹配上的才调高德
             coord_matches = {}
             no_match_coords = []
