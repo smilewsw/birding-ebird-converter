@@ -200,9 +200,11 @@ def convert_incidental_dataframe(
     df: pd.DataFrame,
     include_sw: bool,
     location_map: dict[tuple, dict] | None = None,
+    all_one_to_x: bool = True,
 ):
     """把随手记 DataFrame 转成 eBird CSV。location_map 为 {(lat,lng): {name, lat, lng}}。
-    同一天同一热点的记录会合并为一条 checklist。"""
+    同一天同一热点的记录会合并为一条 checklist。
+    all_one_to_x: 某条 checklist 所有鸟种数量都是1，则数量改为X。"""
     df.columns = [str(c).strip() for c in df.columns]
     if location_map is None:
         location_map = {}
@@ -297,6 +299,20 @@ def convert_incidental_dataframe(
             'duration': duration,
         }
 
+    # 找出"所有鸟种数量都是1"的 checklist（合并组 + 独立记录）
+    all_one_checklists = set()  # 存 row index
+    if all_one_to_x:
+        # 合并组：该组所有行的 count 都是 1
+        for key, indices in merge_groups.items():
+            if all(row_infos[i]['count'] == 1 for i in indices):
+                all_one_checklists.update(indices)
+        # 独立记录：count 是 1
+        for i, ri in enumerate(row_infos):
+            if not ri['can_merge'] and ri['count'] == 1:
+                all_one_checklists.add(i)
+
+    x_count = 0
+
     # 第三步：生成 eBird 数据行
     ebird_data = []
     merge_count = 0
@@ -313,10 +329,16 @@ def convert_incidental_dataframe(
             start_time = ri['record_time']
             duration = 1
 
+        # 全1 checklist → 数量改为X
+        count = ri['count']
+        if i in all_one_checklists:
+            count = 'X'
+            x_count += 1
+
         items = [''] * 19
         items[0] = ri['common_name']
         items[2] = ri['sci_name']
-        items[3] = ri['count']
+        items[3] = count
         items[4] = ri['obs_note']
         items[5] = ri['loc_name']
         items[6] = ri['loc_lat']
@@ -350,6 +372,7 @@ def convert_incidental_dataframe(
         'provinces': df['省'].nunique(),
         'heard': 0,
         'checklists': checklist_count,
+        'x_count': x_count,
         'size_kb': len(csv_bytes) / 1024,
     }, output_df
 
@@ -889,9 +912,10 @@ else:
     # ===== 随手记转换 =====
     st.subheader("3. 转换并下载")
     include_software_info = st.checkbox("在备注中包含软件信息", value=True)
+    all_one_to_x = st.checkbox("所有数量为1的记录转为X", value=True, help="若某条 checklist 的所有鸟种数量都是1，则数量改为X")
     if st.button("🚀 开始转换", type="primary", use_container_width=True):
         try:
-            csv_bytes, summary, output_df = convert_incidental_dataframe(df, include_software_info, matches)
+            csv_bytes, summary, output_df = convert_incidental_dataframe(df, include_software_info, matches, all_one_to_x)
             st.session_state["_convert_result"] = {
                 'csv_bytes': csv_bytes,
                 'summary': summary,
@@ -910,10 +934,11 @@ else:
         c1.metric("记录数", summary['records'])
         c2.metric("鸟种数", summary['species'])
         c3.metric("坐标点数", summary['locations'])
-        c4, c5, c6 = st.columns(3)
+        c4, c5, c6, c7 = st.columns(4)
         c4.metric("checklist数", summary.get('checklists', 0))
-        c5.metric("文件大小", f"{summary['size_kb']:.1f} KB")
-        c6.metric("省份", summary['provinces'])
+        c5.metric("数量X", summary.get('x_count', 0))
+        c6.metric("文件大小", f"{summary['size_kb']:.1f} KB")
+        c7.metric("省份", summary['provinces'])
         if summary['size_kb'] > 1024:
             st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
         st.download_button(
