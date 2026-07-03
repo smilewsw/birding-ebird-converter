@@ -636,7 +636,7 @@ else:
         if m['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）'):
             current_label = f"[热点] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
         else:
-            current_label = f"[坐标] {c['name']} ({m['lat']:.4f},{m['lng']:.4f})"
+            current_label = f"[坐标] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
         edit_rows.append({
             "原始地点": c['name'],
             "坐标": f"({c['lat']:.4f}, {c['lng']:.4f})",
