@@ -26,26 +26,16 @@ st.set_page_config(
 st.title("🦜 观鸟记录中心 → eBird 转换器")
 st.markdown("把中国观鸟记录中心（birdreport.cn）导出的 Excel 转换为 eBird 批量导入格式，**自动匹配 eBird 热点**。")
 
-# ---- API Keys（优先 Secrets，兜底硬编码） ----
-def _get_key(name: str) -> str:
-    """优先从 Streamlit Secrets 读取，否则用硬编码 Key。"""
-    try:
-        return st.secrets[name]
-    except Exception:
-        pass
-    env_val = os.environ.get(name, "")
-    if env_val:
-        return env_val
-    # 硬编码兜底
-    _FALLBACK = {
-        "EBIRD_API_KEY": "qbkd2uh5dfnm",
-        "AMAP_API_KEY": "0407b7c846eb4d89e0b34ae5442ee447",
-    }
-    return _FALLBACK.get(name, "")
+# ---- API Keys（通过 Streamlit Secrets 配置，见 .streamlit/secrets.toml） ----
+ebird_key = st.secrets.get("EBIRD_API_KEY", "")
+amap_key = st.secrets.get("AMAP_API_KEY", "")
 
+if not ebird_key:
+    st.error("未配置 eBird API Key，请在 Streamlit Cloud → Settings → Secrets 中设置。")
+    st.stop()
 
-ebird_key = _get_key("EBIRD_API_KEY")
-amap_key = _get_key("AMAP_API_KEY")
+if not amap_key:
+    st.warning("未配置高德 API Key，无匹配热点时将无法做地理编码兜底。")
 
 # ---- 缓存：拉取省份热点 ----
 @st.cache_data(ttl=3600, show_spinner="正在加载 eBird 热点数据…")
