@@ -457,6 +457,7 @@ if mode == "定点记":
 
     # 手动修正
     with st.expander("🔧 手动修正地点匹配（可选）"):
+        st.caption("💡 提示：选择框可直接输入关键字模糊查询热点")
         for loc in unique_locations:
             m = matches.get(loc)
             if not m:
@@ -478,27 +479,42 @@ if mode == "定点记":
                     }
                 continue
             candidate_labels = [f"{_extract_cn(h['locName'])}  ({h.get('lat',''):.4f},{h.get('lng',''):.4f})" for h in candidates]
-            current_name = m['name']
-            try:
-                current_idx = next(i for i, h in enumerate(candidates) if h['locName'] == current_name)
-            except StopIteration:
-                current_idx = 0
-            new_idx = st.selectbox(
-                f"「{loc}」→",
-                options=range(len(candidates)),
-                format_func=lambda i, labels=candidate_labels: labels[i],
-                index=min(current_idx, len(candidates) - 1),
-                key=f"_sel_{loc}",
+            has_hotspot_source = m['source'] in ('eBird 热点', 'eBird 热点（手动）')
+            options = ["⸺ 保持当前 ⸺"] + candidate_labels
+
+            widget_key = f"_sel_{loc}"
+            prev_sel = st.session_state.get(widget_key, "⸺ 保持当前 ⸺")
+            already_selected = prev_sel != "⸺ 保持当前 ⸺"
+
+            if has_hotspot_source or already_selected:
+                try:
+                    current_idx = next(i for i, h in enumerate(candidates) if h['locName'] == m['name'])
+                    default_idx = current_idx + 1
+                except StopIteration:
+                    default_idx = 0
+                label = f"「{loc}」→"
+            else:
+                default_idx = 0
+                label = f"「{loc}」→ ⚠️ 未匹配热点"
+
+            new_label = st.selectbox(
+                label,
+                options=options,
+                index=min(default_idx, len(options) - 1),
+                key=widget_key,
             )
-            chosen = candidates[new_idx]
-            if chosen['locName'] != current_name or m['source'] not in ('eBird 热点', 'eBird 热点（手动）'):
-                matches[loc] = {
-                    'name': chosen['locName'],
-                    'lat': chosen.get('lat', ''),
-                    'lng': chosen.get('lng', ''),
-                    'source': 'eBird 热点（手动）',
-                    'candidates': candidates,
-                }
+
+            if new_label != "⸺ 保持当前 ⸺":
+                chosen_idx = candidate_labels.index(new_label)
+                chosen = candidates[chosen_idx]
+                if chosen['locName'] != m['name']:
+                    matches[loc] = {
+                        'name': chosen['locName'],
+                        'lat': chosen.get('lat', ''),
+                        'lng': chosen.get('lng', ''),
+                        'source': 'eBird 热点（手动）',
+                        'candidates': candidates,
+                    }
 
     # ===== 定点记转换 =====
     st.subheader("3. 转换并下载")
