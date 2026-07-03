@@ -477,7 +477,7 @@ except Exception as e:
 _file_hash = hashlib.md5(file_bytes).hexdigest()
 if st.session_state.get("_prev_file_hash") != _file_hash:
     for k in list(st.session_state.keys()):
-        if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_") or k.startswith("_prev_mode") or k == "_convert_result":
+        if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_") or k.startswith("_prev_mode") or k == "_convert_result" or k == "_convert_opts":
             del st.session_state[k]
     st.session_state["_prev_file_hash"] = _file_hash
     st.rerun()
@@ -508,7 +508,7 @@ mode = manual_mode
 if st.session_state.get("_prev_mode") != mode:
     # 清除所有匹配相关的缓存
     for k in list(st.session_state.keys()):
-        if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_") or k == "_convert_result":
+        if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_") or k == "_convert_result" or k == "_convert_opts":
             del st.session_state[k]
         if k.startswith("_prev_mode"):
             continue  # 下面马上要更新
@@ -654,6 +654,12 @@ if mode == "定点记":
     st.subheader("3. 转换并下载")
     include_software_info = st.checkbox("在备注中包含软件信息", value=True)
     all_one_to_x = st.checkbox("所有数量为1的报告转为X", value=True, help="若某条报告的所有鸟种数量都是1，则数量改为X")
+    # 选项变化时清除旧转换结果
+    _opts_key = (include_software_info, all_one_to_x)
+    if st.session_state.get("_convert_opts") != _opts_key:
+        if "_convert_result" in st.session_state:
+            del st.session_state["_convert_result"]
+        st.session_state["_convert_opts"] = _opts_key
     if st.button("🚀 开始转换", type="primary", use_container_width=True):
         try:
             csv_bytes, summary, output_df = convert_dataframe(df, include_software_info, matches, all_one_to_x)
@@ -924,6 +930,12 @@ else:
     st.subheader("3. 转换并下载")
     include_software_info = st.checkbox("在备注中包含软件信息", value=True)
     all_one_to_x = st.checkbox("所有数量为1的记录转为X", value=True, help="若某条 checklist 的所有鸟种数量都是1，则数量改为X")
+    # 选项变化时清除旧转换结果
+    _opts_key = (include_software_info, all_one_to_x)
+    if st.session_state.get("_convert_opts") != _opts_key:
+        if "_convert_result" in st.session_state:
+            del st.session_state["_convert_result"]
+        st.session_state["_convert_opts"] = _opts_key
     if st.button("🚀 开始转换", type="primary", use_container_width=True):
         try:
             csv_bytes, summary, output_df = convert_incidental_dataframe(df, include_software_info, matches, all_one_to_x)
