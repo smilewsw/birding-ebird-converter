@@ -385,12 +385,15 @@ mode = manual_mode
 
 # ---- 清除旧状态（模式切换时） ----
 if st.session_state.get("_prev_mode") != mode:
+    # 清除所有匹配相关的缓存
     for k in list(st.session_state.keys()):
         if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_"):
             del st.session_state[k]
+        if k.startswith("_prev_mode"):
+            continue  # 下面马上要更新
     st.session_state["_prev_mode"] = mode
-    # 强制重新渲染，避免旧模式残留
     st.rerun()
+    st.stop()  # 确保不再执行旧模式代码
 
 # ===== 定点记模式 =====
 if mode == "定点记":
