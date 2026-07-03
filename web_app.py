@@ -362,12 +362,14 @@ except Exception as e:
     st.error(f"读取 Excel 失败：{e}")
     st.stop()
 
-# 上传新文件时清除旧文件的匹配缓存
-if st.session_state.get("_prev_filename") != uploaded.name:
+# 上传新文件时清除旧文件的匹配缓存（用文件内容哈希判断，同名不同内容也能识别）
+import hashlib
+_file_hash = hashlib.md5(file_bytes).hexdigest()
+if st.session_state.get("_prev_file_hash") != _file_hash:
     for k in list(st.session_state.keys()):
         if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_") or k.startswith("_prev_mode"):
             del st.session_state[k]
-    st.session_state["_prev_filename"] = uploaded.name
+    st.session_state["_prev_file_hash"] = _file_hash
 
 # 提取列名
 df.columns = [str(c).strip() for c in df.columns]
