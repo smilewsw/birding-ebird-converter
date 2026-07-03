@@ -560,16 +560,10 @@ else:
                 p = p or '其他'
                 province_coords.setdefault(p, []).append(c)
 
-            # Step 2: 并发拉取各省热点（1~2 秒搞定全部省份）
+            # Step 2: 逐省拉取热点（使用缓存避免重复请求）
             province_hotspots: dict[str, list[dict]] = {}
-            def _fetch_for_province(p):
-                return p, fetch_hotspots(p, ebird_key)
-
-            with ThreadPoolExecutor(max_workers=len(province_coords)) as pool:
-                futures = [pool.submit(_fetch_for_province, p) for p in province_coords]
-                for f in as_completed(futures):
-                    p, hotspots = f.result()
-                    province_hotspots[p] = hotspots
+            for p in province_coords:
+                province_hotspots[p] = get_province_hotspots(p, ebird_key) if p != '其他' else []
 
             # 存入 session_state 供手动修正使用
             st.session_state["_province_hotspots"] = province_hotspots
