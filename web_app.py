@@ -935,10 +935,11 @@ else:
         c2.metric("鸟种数", summary['species'])
         c3.metric("坐标点数", summary['locations'])
         c4, c5, c6, c7 = st.columns(4)
-        c4.metric("checklist数", summary.get('checklists', 0))
+        c4.metric("合并后记录数", summary.get('checklists', 0))
         c5.metric("数量X", summary.get('x_count', 0))
         c6.metric("文件大小", f"{summary['size_kb']:.1f} KB")
         c7.metric("省份", summary['provinces'])
+        st.caption("💡 同一天同一热点的记录会合并为一条，起始时间取最早一条，时长为最晚减最早")
         if summary['size_kb'] > 1024:
             st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
         st.download_button(
