@@ -591,6 +591,7 @@ else:
                             'lng': round(c['lng'], 5),
                             'source': '高德地点' if poi else '原始坐标',
                             'candidates': hotspots,  # 全省热点，方便手动选
+                            '_nearby_hotspot': nearest,
                         }
             else:
                 # 无高德 Key：直接用 eBird 热点或行政区名
@@ -619,11 +620,13 @@ else:
     matched_amap = sum(1 for v in matches.values() if v['source'] == '高德地点')
     raw_coord = sum(1 for v in matches.values() if v['source'] == '原始坐标')
     manual_count = sum(1 for v in matches.values() if v['source'] == '手动修改')
-    col_a, col_b, col_c, col_d = st.columns(4)
+    nearby_count = sum(1 for v in matches.values() if v.get('_nearby_hotspot'))
+    col_a, col_b, col_c, col_d, col_e = st.columns(5)
     col_a.metric("✅ 热点匹配", matched_hotspot)
     col_b.metric("📍 高德地点", matched_amap)
     col_c.metric("📌 原始坐标", raw_coord)
     col_d.metric("✏️ 手动修改", manual_count)
+    col_e.metric("🎯 附近有热点", nearby_count)
 
     # 匹配结果表格
     st.markdown("#### 匹配结果（可修改）")
@@ -639,10 +642,14 @@ else:
             current_label = f"[手动] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
         else:
             current_label = f"[坐标] {m['name']} ({m['lat']:.4f},{m['lng']:.4f})"
+        # 来源列加上热点候选提示
+        source_display = m['source']
+        if m.get('_nearby_hotspot') and m['source'] not in ('eBird 热点（坐标）', 'eBird 热点（手动）'):
+            source_display += ' (+热点)'
         edit_rows.append({
             "原始坐标": c['name'],
             "坐标": f"({c['lat']:.4f}, {c['lng']:.4f})",
-            "匹配来源": m['source'],
+            "匹配来源": source_display,
             "当前匹配": current_label,
         })
 
