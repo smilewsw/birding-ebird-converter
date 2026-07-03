@@ -83,8 +83,10 @@ def convert_dataframe(
     df: pd.DataFrame,
     include_sw: bool,
     location_map: dict[str, dict] | None = None,
+    all_one_to_x: bool = True,
 ):
-    """把 DataFrame 转成 eBird CSV。location_map 为 {地点名: {name, lat, lng}}。"""
+    """把 DataFrame 转成 eBird CSV。location_map 为 {地点名: {name, lat, lng}}。
+    all_one_to_x: 若某报告所有鸟种数量都是1，则数量改为X。"""
     df.columns = [str(c).strip() for c in df.columns]
     try:
         iucn_pos = list(df.columns).index('IUCN受胁级别')
@@ -102,6 +104,16 @@ def convert_dataframe(
     location_set = set()
     province_set = set()
 
+    # 找出"所有鸟种数量都是1"的报告编号
+    all_one_reports = set()
+    if all_one_to_x and '报告编号' in df.columns:
+        for report_id, group in df.groupby('报告编号'):
+            counts = group['鸟种数量'].dropna()
+            if len(counts) > 0 and (counts == 1).all():
+                all_one_reports.add(report_id)
+
+    x_count = 0
+
     for _, row in df.iterrows():
         common_name = str(row.get('中文名', '')).strip()
         if common_name in special_map:
@@ -114,6 +126,12 @@ def convert_dataframe(
         obs_note = "heard" if (pd.notnull(count_val) and count_val == 0) else ""
         if obs_note == "heard":
             heard_count += 1
+
+        # 全1报告 → 数量改为X
+        report_id = str(row.get('报告编号', ''))
+        if report_id in all_one_reports:
+            count = 'X'
+            x_count += 1
         species_set.add(common_name)
         raw_loc = str(row.get(loc_col_name, '')).strip()
         location_set.add(raw_loc)
@@ -171,6 +189,7 @@ def convert_dataframe(
         'locations': len(location_set),
         'provinces': len(province_set),
         'heard': heard_count,
+        'x_count': x_count,
         'size_kb': len(csv_bytes) / 1024,
     }, output_df
 
@@ -537,9 +556,10 @@ if mode == "定点记":
     # ===== 定点记转换 =====
     st.subheader("3. 转换并下载")
     include_software_info = st.checkbox("在备注中包含软件信息", value=True)
+    all_one_to_x = st.checkbox("所有数量为1的报告转为X", value=True, help="若某条报告的所有鸟种数量都是1，则数量改为X")
     if st.button("🚀 开始转换", type="primary", use_container_width=True):
         try:
-            csv_bytes, summary, output_df = convert_dataframe(df, include_software_info, matches)
+            csv_bytes, summary, output_df = convert_dataframe(df, include_software_info, matches, all_one_to_x)
             st.session_state["_convert_result"] = {
                 'csv_bytes': csv_bytes,
                 'summary': summary,
@@ -558,10 +578,11 @@ if mode == "定点记":
         c1.metric("记录数", summary['records'])
         c2.metric("鸟种数", summary['species'])
         c3.metric("地点数", summary['locations'])
-        c4, c5, c6 = st.columns(3)
+        c4, c5, c6, c7 = st.columns(4)
         c4.metric("heard", summary['heard'])
-        c5.metric("文件大小", f"{summary['size_kb']:.1f} KB")
-        c6.metric("省份", summary['provinces'])
+        c5.metric("数量X", summary.get('x_count', 0))
+        c6.metric("文件大小", f"{summary['size_kb']:.1f} KB")
+        c7.metric("省份", summary['provinces'])
         if summary['size_kb'] > 1024:
             st.error("⚠️ 文件超过 1MB，eBird 不接受！请分批处理。")
         st.download_button(
