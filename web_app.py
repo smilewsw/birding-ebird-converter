@@ -380,7 +380,7 @@ mode = manual_mode
 # ---- 清除旧状态（模式切换时） ----
 if st.session_state.get("_prev_mode") != mode:
     for k in list(st.session_state.keys()):
-        if k.startswith("_loc_matches") or k.startswith("_sel_"):
+        if k.startswith("_loc_matches") or k.startswith("_sel_") or k.startswith("_province_"):
             del st.session_state[k]
     st.session_state["_prev_mode"] = mode
 
@@ -552,6 +552,9 @@ else:
                     p, hotspots = f.result()
                     province_hotspots[p] = hotspots
 
+            # 存入 session_state 供手动修正使用
+            st.session_state["_province_hotspots"] = province_hotspots
+
             # Step 3: 本地 Haversine 距离匹配（纯 CPU，瞬间完成）
             coord_matches = {}
             no_match_coords = []  # 没匹配上的，后续高德兜底
@@ -568,7 +571,7 @@ else:
                             'lat': nearest.get('lat', round(c['lat'], 5)),
                             'lng': nearest.get('lng', round(c['lng'], 5)),
                             'source': 'eBird 热点（坐标）',
-                            'candidates': [nearest],
+                            'candidates': hotspots,  # 全省热点，方便手动选
                         }
                     else:
                         no_match_coords.append(c)
@@ -589,7 +592,7 @@ else:
                                 'lat': round(c['lat'], 5),
                                 'lng': round(c['lng'], 5),
                                 'source': '高德地点',
-                                'candidates': [],
+                                'candidates': province_hotspots.get(c['province'] or '其他', []),
                             }
                         else:
                             coord_matches[key] = {
@@ -597,7 +600,7 @@ else:
                                 'lat': round(c['lat'], 5),
                                 'lng': round(c['lng'], 5),
                                 'source': '原始坐标',
-                                'candidates': [],
+                                'candidates': province_hotspots.get(c['province'] or '其他', []),
                             }
             elif no_match_coords:
                 for c in no_match_coords:
@@ -606,7 +609,7 @@ else:
                         'lat': round(c['lat'], 5),
                         'lng': round(c['lng'], 5),
                         'source': '原始坐标',
-                        'candidates': [],
+                        'candidates': province_hotspots.get(c['province'] or '其他', []),
                     }
 
             st.session_state["_loc_matches"] = coord_matches
@@ -654,6 +657,37 @@ else:
                      "匹配来源": st.column_config.TextColumn(width="small"),
                      "当前匹配": st.column_config.TextColumn(width="large"),
                  })
+
+    # 手动修正
+    with st.expander("🔧 手动修正地点匹配（可选）"):
+        for c in coords_list:
+            m = matches[c['key']]
+            candidates = m.get('candidates', [])
+            if not candidates:
+                st.caption(f"「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) — 无候选热点")
+                continue
+            candidate_labels = [f"{_extract_cn(h['locName'])}  ({h.get('lat',''):.4f},{h.get('lng',''):.4f})" for h in candidates]
+            current_name = m['name']
+            try:
+                current_idx = next(i for i, h in enumerate(candidates) if h['locName'] == current_name)
+            except StopIteration:
+                current_idx = 0
+            new_idx = st.selectbox(
+                f"「{c['name']}」({c['lat']:.4f},{c['lng']:.4f}) →",
+                options=range(len(candidates)),
+                format_func=lambda i, labels=candidate_labels: labels[i],
+                index=min(current_idx, len(candidates) - 1),
+                key=f"_sel_{c['key']}",
+            )
+            chosen = candidates[new_idx]
+            if chosen['locName'] != current_name or m['source'] not in ('eBird 热点（坐标）', 'eBird 热点（手动）'):
+                matches[c['key']] = {
+                    'name': chosen['locName'],
+                    'lat': chosen.get('lat', ''),
+                    'lng': chosen.get('lng', ''),
+                    'source': 'eBird 热点（手动）',
+                    'candidates': candidates,
+                }
 
     # ===== 随手记转换 =====
     st.subheader("3. 转换并下载")
