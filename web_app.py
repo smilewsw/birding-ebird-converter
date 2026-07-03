@@ -247,7 +247,7 @@ uploaded = st.file_uploader(
 
 if uploaded is None:
     st.markdown("---")
-    st.caption("基于开源项目 [birdreportcn-to-ebird](https://github.com/sun-jiao/birdreportcn-to-ebird) 改编")
+    st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter)")
     st.stop()
 
 # 读取数据
@@ -283,7 +283,7 @@ if st.button("🔍 开始匹配热点", type="primary"):
 # 展示匹配结果
 if "_loc_matches" not in st.session_state:
     st.markdown("---")
-    st.caption("基于开源项目 [birdreportcn-to-ebird](https://github.com/sun-jiao/birdreportcn-to-ebird) 改编")
+    st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter)")
     st.stop()
 
 matches = st.session_state["_loc_matches"]
@@ -409,4 +409,4 @@ if st.button("🚀 开始转换", type="primary", use_container_width=True):
         st.exception(e)
 
 st.markdown("---")
-st.caption("基于开源项目 [birdreportcn-to-ebird](https://github.com/sun-jiao/birdreportcn-to-ebird) 改编 | 热点匹配由 eBird API + 高德地图提供")
+st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter) | 热点匹配由 eBird API + 高德地图提供")
