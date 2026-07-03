@@ -14,6 +14,7 @@ from hotspot_matcher import (
     fetch_hotspots,
     match_location,
     find_nearest_hotspot,
+    reverse_geocode_amap,
     geocode_amap,
     PROVINCE_TO_ISO,
     _extract_cn,
@@ -538,19 +539,33 @@ else:
             # 并发请求，大幅提速
             def _query(c):
                 nearest = find_nearest_hotspot(c['lat'], c['lng'], ebird_key, dist=5)
-                return c['key'], c, nearest
+                if nearest:
+                    return c['key'], c, nearest, 'eBird'
+                # eBird 无热点，高德兜底
+                poi = reverse_geocode_amap(c['lat'], c['lng'], amap_key)
+                if poi:
+                    return c['key'], c, {'locName': poi, 'lat': round(c['lat'], 5), 'lng': round(c['lng'], 5)}, 'gaode'
+                return c['key'], c, None, None
 
             with ThreadPoolExecutor(max_workers=10) as pool:
                 futures = {pool.submit(_query, c): c for c in coords_list}
                 for future in as_completed(futures):
-                    key, c, nearest = future.result()
-                    if nearest:
+                    key, c, result, source = future.result()
+                    if source == 'eBird':
                         coord_matches[key] = {
-                            'name': nearest['locName'],
-                            'lat': nearest.get('lat', round(c['lat'], 5)),
-                            'lng': nearest.get('lng', round(c['lng'], 5)),
+                            'name': result['locName'],
+                            'lat': result.get('lat', round(c['lat'], 5)),
+                            'lng': result.get('lng', round(c['lng'], 5)),
                             'source': 'eBird 热点（坐标）',
-                            'candidates': [nearest],
+                            'candidates': [result],
+                        }
+                    elif source == 'gaode':
+                        coord_matches[key] = {
+                            'name': result['locName'],
+                            'lat': result['lat'],
+                            'lng': result['lng'],
+                            'source': '高德坐标',
+                            'candidates': [],
                         }
                     else:
                         coord_matches[key] = {
@@ -571,10 +586,12 @@ else:
 
     # 统计
     matched_hotspot = sum(1 for v in matches.values() if v['source'] in ('eBird 热点（坐标）', 'eBird 热点（手动）'))
+    matched_amap = sum(1 for v in matches.values() if v['source'] == '高德坐标')
     raw_coord = sum(1 for v in matches.values() if v['source'] == '原始坐标')
-    col_a, col_b = st.columns(2)
+    col_a, col_b, col_c = st.columns(3)
     col_a.metric("✅ 热点匹配", matched_hotspot)
-    col_b.metric("📍 原始坐标", raw_coord)
+    col_b.metric("📍 高德", matched_amap)
+    col_c.metric("📌 原始坐标", raw_coord)
 
     # 匹配结果表格
     st.markdown("#### 匹配结果（可修改）")

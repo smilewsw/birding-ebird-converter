@@ -187,3 +187,40 @@ def geocode_amap(address: str, province: str, amap_key: str) -> tuple[float | No
     except Exception:
         pass
     return None, None
+
+
+def reverse_geocode_amap(lat: float, lng: float, amap_key: str) -> str | None:
+    """高德逆地理编码：GPS → 附近 POI 名称。
+
+    返回最近的 POI 名称，无 POI 则返回结构化地址片段。失败返回 None。
+    """
+    url = "https://restapi.amap.com/v3/geocode/regeo"
+    params = {
+        "key": amap_key,
+        "location": f"{lng},{lat}",
+        "extensions": "all",
+        "poitype": "",  # 不限 POI 类型
+        "radius": 1000,  # 1km 内
+        "roadlevel": 0,
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=5)
+        data = resp.json()
+        if data.get("status") == "1":
+            regeo = data.get("regeocode", {})
+            # 优先取最近 POI
+            pois = regeo.get("pois", [])
+            if pois:
+                return pois[0].get("name")
+            # 无 POI，取地址字段
+            addr = regeo.get("addressComponent", {})
+            parts = [
+                addr.get(k, "")
+                for k in ("township", "streetNumber", "neighborhood")
+            ]
+            name = "".join(p for p in parts if p)
+            if name:
+                return name
+    except Exception:
+        pass
+    return None
