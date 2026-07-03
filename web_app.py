@@ -397,9 +397,9 @@ if st.button("🚀 开始转换", type="primary", use_container_width=True):
         )
 
         with st.expander("👀 预览前 5 行"):
-            cols = ["俗名", "", "拉丁名", "数量", "备注", "地点", "纬度", "经度",
+            cols = ["俗名", "属", "拉丁名", "数量", "备注", "地点", "纬度", "经度",
                     "日期", "时间", "省份", "国家", "协议", "人数", "时长",
-                    "完整", "", "", "提交备注"]
+                    "完整", "距离", "面积", "提交备注"]
             preview = output_df.head().copy()
             preview.columns = cols
             st.dataframe(preview, use_container_width=True)
