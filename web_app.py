@@ -459,7 +459,6 @@ uploaded = st.file_uploader(
 
 if uploaded is None:
     st.markdown("---")
-    st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter)")
     st.stop()
 
 # 读取数据
@@ -534,7 +533,6 @@ if mode == "定点记":
 
     if "_loc_matches" not in st.session_state:
         st.markdown("---")
-        st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter)")
         st.stop()
 
     matches = st.session_state["_loc_matches"]
@@ -796,7 +794,6 @@ else:
 
     if "_loc_matches" not in st.session_state:
         st.markdown("---")
-        st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter)")
         st.stop()
 
     matches = st.session_state["_loc_matches"]
@@ -973,6 +970,3 @@ else:
                                "日期", "时间", "省份", "国家", "协议", "人数", "时长",
                                "完整", "距离", "面积", "提交备注"]
             st.dataframe(preview, use_container_width=True)
-
-st.markdown("---")
-st.caption("开发者：司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter) | 热点匹配由 eBird API + 高德地图提供")
