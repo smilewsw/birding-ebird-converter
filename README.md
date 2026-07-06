@@ -53,8 +53,6 @@ EBIRD_API_KEY = "your_ebird_api_key"
 AMAP_API_KEY = "your_amap_api_key"
 ```
 
-## 开发者
-
-司薇 | [GitHub](https://github.com/smilewsw/birding-ebird-converter)
+## 致谢
 
 感谢 [birdreportcn-to-ebird](https://github.com/sun-jiao/birdreportcn-to-ebird) 提供数据转换基础逻辑。
